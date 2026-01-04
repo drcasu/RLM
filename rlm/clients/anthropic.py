@@ -1,4 +1,3 @@
-import logging
 from collections import defaultdict
 from typing import Any
 
@@ -6,8 +5,6 @@ import anthropic
 
 from rlm.clients.base_lm import BaseLM
 from rlm.core.types import ModelUsageSummary, UsageSummary
-
-logger = logging.getLogger(__name__)
 
 
 class AnthropicClient(BaseLM):
@@ -54,12 +51,6 @@ class AnthropicClient(BaseLM):
 
         full_response = "".join(parts)
 
-        if not full_response:
-            logger.warning("Received empty response from Anthropic API")
-
-        if response.stop_reason == "max_tokens":
-            logger.warning(f"Response truncated at {self.max_tokens} tokens")
-
         self._track_cost(response, model)
         return full_response
 
@@ -84,12 +75,6 @@ class AnthropicClient(BaseLM):
             response = await stream.get_final_message()
 
         full_response = "".join(parts)
-
-        if not full_response:
-            logger.warning("Received empty response from Anthropic API")
-
-        if response.stop_reason == "max_tokens":
-            logger.warning(f"Response truncated at {self.max_tokens} tokens")
 
         self._track_cost(response, model)
         return full_response
