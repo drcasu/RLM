@@ -115,8 +115,16 @@ def format_execution_result(result: REPLResult) -> str:
     return "\n\n".join(result_parts) if result_parts else "No output"
 
 
-def check_for_final_answer(response: str, repl_env, logger) -> str | None:
-    """Check if response contains a final answer."""
+def check_for_final_answer(response: str, env_locals: dict) -> str | None:
+    """Check if response contains a final answer and resolve it.
+
+    Args:
+        response: The LLM response text to check for FINAL/FINAL_VAR patterns.
+        env_locals: Dictionary of local variables from the REPL environment.
+
+    Returns:
+        The resolved final answer string, or None if not found.
+    """
     result = find_final_answer(response)
     if result is None:
         return None
@@ -126,24 +134,13 @@ def check_for_final_answer(response: str, repl_env, logger) -> str | None:
     if answer_type == "FINAL":
         return content
     elif answer_type == "FINAL_VAR":
-        # Get the variable directly from the REPL environment
-        try:
-            # Strip spaces, quotes, and newlines from variable name
-            variable_name = content.strip().strip('"').strip("'").strip("\n").strip("\r")
+        # Strip spaces, quotes, and newlines from variable name
+        variable_name = content.strip().strip('"').strip("'").strip("\n").strip("\r")
 
-            # Check if variable exists in the REPL environment's locals
-            if variable_name in repl_env.locals:
-                variable_value = repl_env.locals[variable_name]
-                return str(variable_value)
-            else:
-                error_msg = f"Variable '{variable_name}' not found in REPL environment"
-                logger.log_tool_execution("FINAL_VAR", error_msg)
-                return None
-        except Exception as e:
-            error_msg = f"Error retrieving variable '{variable_name}': {str(e)}"
-            print("ERROR MESSAGE", error_msg)
-            logger.log_tool_execution("FINAL_VAR", error_msg)
-            return None
+        # Check if variable exists in the environment's locals
+        if variable_name in env_locals:
+            return str(env_locals[variable_name])
+        return None
 
     return None
 
