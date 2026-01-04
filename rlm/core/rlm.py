@@ -71,7 +71,7 @@ class RLM:
         self.backend = backend
         self.backend_kwargs = backend_kwargs
         self.environment_type = environment
-        self.environment_kwargs = environment_kwargs.copy()
+        self.environment_kwargs = (environment_kwargs or {}).copy()
         self.other_backends = other_backends
         self.other_backend_kwargs = other_backend_kwargs
 
@@ -91,7 +91,7 @@ class RLM:
                 backend=backend,
                 backend_kwargs=filter_sensitive_keys(backend_kwargs),
                 environment_type=environment,
-                environment_kwargs=filter_sensitive_keys(environment_kwargs),
+                environment_kwargs=filter_sensitive_keys(environment_kwargs or {}),
                 other_backends=other_backends,
             )
             if self.logger:
