@@ -1,21 +1,3 @@
-"""
-Example script to test Prime Intellect Sandboxes.
-
-Requirements:
-1. Install the Prime SDK:
-   pip install prime
-   # or for lightweight SDK only:
-   pip install prime-sandboxes
-
-2. Authenticate with Prime:
-   prime login
-   # or set environment variable:
-   export PRIME_API_KEY="your-api-key"
-
-3. Set your LLM API key (OpenAI in this example):
-   export OPENAI_API_KEY="your-api-key"
-"""
-
 import os
 
 from dotenv import load_dotenv

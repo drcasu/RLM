@@ -14,6 +14,7 @@ import time
 from typing import Any
 
 import requests
+from prime_sandboxes import AsyncSandboxClient, CreateSandboxRequest
 
 from rlm.core.comms_utils import LMRequest, send_lm_request, send_lm_request_batched
 from rlm.core.types import REPLResult, RLMChatCompletion
@@ -334,12 +335,6 @@ class PrimeREPL(IsolatedEnv):
 
     async def _async_setup(self):
         """Async setup: create sandbox, start broker, expose port."""
-        # Import Prime SDK
-        try:
-            from prime_sandboxes import AsyncSandboxClient, CreateSandboxRequest
-        except ImportError:
-            from prime_cli.api.sandbox import AsyncSandboxClient, CreateSandboxRequest
-
         async with AsyncSandboxClient() as sandboxes:
             # Create the sandbox
             request = CreateSandboxRequest(
@@ -352,27 +347,26 @@ class PrimeREPL(IsolatedEnv):
             self.sandbox_id = sandbox.id
 
             # Wait for sandbox to be ready
-            await sandboxes.wait_for_creation(self.sandbox_id)
+            await sandboxes.wait_for_creation(
+                self.sandbox_id, max_attempts=self.timeout_minutes * 60
+            )
 
             # Install dependencies for the broker
             await sandboxes.execute_command(
                 self.sandbox_id,
                 "pip install flask requests dill numpy pandas scipy sympy pyyaml tqdm",
-                timeout=300,
             )
 
             # Write the broker script to the sandbox
             await sandboxes.execute_command(
                 self.sandbox_id,
                 f"cat > /tmp/broker.py << 'BROKER_EOF'\n{_BROKER_SCRIPT}\nBROKER_EOF",
-                timeout=30,
             )
 
             # Start the broker as a background job
             await sandboxes.execute_command(
                 self.sandbox_id,
                 "nohup python /tmp/broker.py > /tmp/broker.log 2>&1 &",
-                timeout=10,
             )
 
             # Wait for broker to start
@@ -477,11 +471,6 @@ class PrimeREPL(IsolatedEnv):
 
     async def _async_execute_code(self, code: str) -> tuple[str, str]:
         """Async code execution in the sandbox."""
-        try:
-            from prime_sandboxes import AsyncSandboxClient
-        except ImportError:
-            from prime_cli.api.sandbox import AsyncSandboxClient
-
         script = _build_exec_script(code, self.BROKER_PORT)
 
         # Write script to file and execute (avoids shell escaping issues)
@@ -492,14 +481,12 @@ class PrimeREPL(IsolatedEnv):
             await sandboxes.execute_command(
                 self.sandbox_id,
                 f"echo '{script_b64}' | base64 -d > /tmp/exec_script.py",
-                timeout=30,
             )
 
             # Execute the script
             result = await sandboxes.execute_command(
                 self.sandbox_id,
                 "python /tmp/exec_script.py",
-                timeout=300,
             )
 
             return result.stdout, result.stderr
@@ -546,11 +533,6 @@ class PrimeREPL(IsolatedEnv):
 
     async def _async_cleanup(self):
         """Async cleanup: unexpose port and delete sandbox."""
-        try:
-            from prime_sandboxes import AsyncSandboxClient
-        except ImportError:
-            from prime_cli.api.sandbox import AsyncSandboxClient
-
         async with AsyncSandboxClient() as sandboxes:
             # Unexpose the broker port
             if self.sandbox_id and self.broker_exposure_id:
