@@ -51,7 +51,7 @@ def main():
         with PrimeREPL(
             name="rlm-lm-demo",
             docker_image="python:3.11-slim",
-            timeout_minutes=1,
+            timeout_minutes=30,
             lm_handler_address=handler.address,
             context_payload=context_payload,
             setup_code=setup_code,
