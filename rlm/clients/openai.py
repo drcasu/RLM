@@ -37,6 +37,7 @@ class OpenAIClient(BaseLM):
 
         # For vLLM, set base_url to local vLLM server address.
         self.client = openai.OpenAI(api_key=api_key, base_url=base_url)
+        self.async_client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url)
         self.model_name = model_name
 
         # Per-model usage tracking
@@ -75,7 +76,7 @@ class OpenAIClient(BaseLM):
         if not model:
             raise ValueError("Model name is required for OpenAI client.")
 
-        response = await self.client.chat.completions.create(model=model, messages=messages)
+        response = await self.async_client.chat.completions.create(model=model, messages=messages)
         self._track_cost(response, model)
         return response.choices[0].message.content
 
