@@ -47,13 +47,18 @@ pip install git+https://github.com/alexzhang13/rlm.git
 
 ## Quick Setup
 Set up the dependencies with `uv` (or your virtual environment of choice):
-```
+```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv init && uv venv --python 3.12  # change version as needed
 uv pip install -e .
 ```
 
-The default RLM object uses a REPL environment that runs on the host process through Python `exec` calls. It uses the same virtual environment as the host process (i.e. it will have access to the same dependencies), but with some limitations in its available global modules. As an example, we can call RLM completions using GPT-5-nano with the Portkey client:
+To run a quick test, the following will run an RLM query with the OpenAI client using your environment variable `OPENAI_API_KEY` (feel free to change this). This will generate console output as well as a log which you can use with the visualizer to explore the trajectories. 
+```bash
+uv run examples/quickstart.py
+```
+
+The default RLM client uses a REPL environment that runs on the host process through Python `exec` calls. It uses the same virtual environment as the host process (i.e. it will have access to the same dependencies), but with some limitations in its available global modules. As an example, we can call RLM completions using GPT-5-nano:
 ```python
 from rlm import RLM
 
@@ -87,7 +92,7 @@ We support several different REPL environments that run on separate, cloud-based
 
 #### Modal Sandboxes <img src="https://github.com/modal-labs.png" alt="Modal" height="20" style="vertical-align: middle;"/>
 To use [Modal Sandboxes](https://modal.com/docs/guide/sandboxes) as the REPL environment, you need to install and authenticate your Modal account.
-```
+```bash
 uv add modal  # add modal library
 modal setup   # authenticate account
 ```
@@ -100,7 +105,7 @@ modal setup   # authenticate account
 > **Prime Intellect Sandboxes are not yet implemented** in `rlm`. This feature is not available at the moment until we patch some bugs.
 
 See [Prime CLI setup instructions](https://docs.primeintellect.ai/inference/overview) for getting setup. You will need to set your CLI key.
-```
+```bash
 export PRIME_API_KEY=...
 ```
 
