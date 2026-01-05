@@ -182,15 +182,15 @@ if not is_safe:
 - 🟡 **Medium** — Recommended for defense in depth
 - 🟢 **Nice to Have** — Additional hardening
 
-### 🔴 Critical (Must Have)
+### 🔴 Critical (Must Have) — ✅ COMPLETED
 
-| # | Issue | Location | Proposed Fix |
-|---|-------|----------|--------------|
-| 1 | `__import__` allowed - enables importing dangerous modules | `local_repl.py` L73 | Replace with restricted `_safe_import` that blocklists dangerous modules |
-| 2 | `open()` unrestricted - full filesystem read/write access | `local_repl.py` L74 | Replace with `_safe_open` that restricts paths to temp_dir only |
-| 3 | No execution timeout - infinite loops hang system | `local_repl.py` L273 | Add `signal.alarm()` or `threading.Timer` to kill long-running code |
-| 4 | No memory limits - code can allocate unlimited memory | `execute_code()` | Use `resource.setrlimit()` on Linux or subprocess with limits |
-| 5 | Docker container runs as root | `docker_repl.py` L225 | Add `--user` flag and `--read-only` filesystem |
+| # | Issue | Location | Fix | Status |
+|---|-------|----------|-----|--------|
+| 1 | `__import__` allowed - enables importing dangerous modules | `local_repl.py` | `_safe_import()` blocks modules from `DANGEROUS_MODULES` | ✅ Fixed |
+| 2 | `open()` unrestricted - full filesystem read/write access | `local_repl.py` | `_safe_open()` restricts paths to `temp_dir` only | ✅ Fixed |
+| 3 | No execution timeout - infinite loops hang system | `local_repl.py` | `execution_timeout` param (default 30s) using threading | ✅ Fixed |
+| 4 | No memory limits - code can allocate unlimited memory | `local_repl.py` | `memory_limit_mb` param (default 512MB) via `resource.setrlimit()` on Linux/Mac | ✅ Fixed |
+| 5 | Docker container runs as root | `docker_repl.py` | Added `--user 1000:1000`, `--read-only`, `--network=none` option | ✅ Fixed |
 
 ### 🟠 High Priority
 
