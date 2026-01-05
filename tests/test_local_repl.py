@@ -193,3 +193,38 @@ class TestLocalREPLCleanup:
         assert os.path.exists(temp_dir)
         repl.cleanup()
         assert not os.path.exists(temp_dir)
+
+
+class TestLocalREPLMultiContext:
+    """Tests for multi-context support."""
+
+    def test_add_context_versioning(self):
+        """Test that add_context creates versioned variables."""
+        repl = LocalREPL()
+        repl.add_context("First", 0)
+        repl.add_context("Second", 1)
+        assert repl.locals["context_0"] == "First"
+        assert repl.locals["context_1"] == "Second"
+        assert repl.locals["context"] == "First"
+        assert repl.get_context_count() == 2
+        repl.cleanup()
+
+    def test_update_handler_address(self):
+        """Test handler address can be updated."""
+        repl = LocalREPL(lm_handler_address=("127.0.0.1", 5000))
+        repl.update_handler_address(("127.0.0.1", 6000))
+        assert repl.lm_handler_address == ("127.0.0.1", 6000)
+        repl.cleanup()
+
+    def test_add_context_auto_increment(self):
+        """Test that add_context auto-increments when no index provided."""
+        repl = LocalREPL()
+        idx1 = repl.add_context("First")
+        idx2 = repl.add_context("Second")
+        assert idx1 == 0
+        assert idx2 == 1
+        assert repl.locals["context_0"] == "First"
+        assert repl.locals["context_1"] == "Second"
+        assert repl.get_context_count() == 2
+        repl.cleanup()
+
