@@ -190,7 +190,14 @@ class RLM:
 
             for i in range(self.max_iterations):
                 # Current prompt = message history + additional prompt suffix
-                current_prompt = message_history + [build_user_prompt(root_prompt, i)]
+                context_count = (
+                    environment.get_context_count()
+                    if hasattr(environment, "get_context_count")
+                    else 1
+                )
+                current_prompt = message_history + [
+                    build_user_prompt(root_prompt, i, context_count)
+                ]
 
                 iteration: RLMIteration = self._completion_turn(
                     prompt=current_prompt,
