@@ -10,36 +10,55 @@ from rlm.core.types import ModelUsageSummary, UsageSummary
 
 load_dotenv()
 
-# Load API keys from environment variables
-DEFAULT_OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-DEFAULT_OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-DEFAULT_PRIME_INTELLECT_BASE_URL = "https://api.pinference.ai/api/v1/"
+# Load API key from environment variable
+DEFAULT_AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
 
 
-class OpenAIClient(BaseLM):
+class AzureOpenAIClient(BaseLM):
     """
-    LM Client for running models with the OpenAI API. Works with vLLM as well.
+    LM Client for running models with the Azure OpenAI API.
     """
 
     def __init__(
         self,
         api_key: str | None = None,
         model_name: str | None = None,
-        base_url: str | None = None,
+        azure_endpoint: str | None = None,
+        api_version: str | None = None,
+        azure_deployment: str | None = None,
         **kwargs,
     ):
         super().__init__(model_name=model_name, **kwargs)
 
         if api_key is None:
-            if base_url == "https://api.openai.com/v1" or base_url is None:
-                api_key = DEFAULT_OPENAI_API_KEY
-            elif base_url == "https://openrouter.ai/api/v1":
-                api_key = DEFAULT_OPENROUTER_API_KEY
+            api_key = DEFAULT_AZURE_OPENAI_API_KEY
 
-        # For vLLM, set base_url to local vLLM server address.
-        self.client = openai.OpenAI(api_key=api_key, base_url=base_url)
-        self.async_client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url)
+        if azure_endpoint is None:
+            azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+
+        if api_version is None:
+            api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01")
+
+        if azure_endpoint is None:
+            raise ValueError(
+                "azure_endpoint is required for Azure OpenAI client. "
+                "Set it via argument or AZURE_OPENAI_ENDPOINT environment variable."
+            )
+
+        self.client = openai.AzureOpenAI(
+            api_key=api_key,
+            azure_endpoint=azure_endpoint,
+            api_version=api_version,
+            azure_deployment=azure_deployment,
+        )
+        self.async_client = openai.AsyncAzureOpenAI(
+            api_key=api_key,
+            azure_endpoint=azure_endpoint,
+            api_version=api_version,
+            azure_deployment=azure_deployment,
+        )
         self.model_name = model_name
+        self.azure_deployment = azure_deployment
 
         # Per-model usage tracking
         self.model_call_counts: dict[str, int] = defaultdict(int)
@@ -57,14 +76,11 @@ class OpenAIClient(BaseLM):
 
         model = model or self.model_name
         if not model:
-            raise ValueError("Model name is required for OpenAI client.")
-
-        extra_body = {}
-        if self.client.base_url == DEFAULT_PRIME_INTELLECT_BASE_URL:
-            extra_body["usage"] = {"include": True}
+            raise ValueError("Model name is required for Azure OpenAI client.")
 
         response = self.client.chat.completions.create(
-            model=model, messages=messages, extra_body=extra_body
+            model=model,
+            messages=messages,
         )
         self._track_cost(response, model)
         return response.choices[0].message.content
@@ -81,14 +97,11 @@ class OpenAIClient(BaseLM):
 
         model = model or self.model_name
         if not model:
-            raise ValueError("Model name is required for OpenAI client.")
-
-        extra_body = {}
-        if self.base_url == DEFAULT_PRIME_INTELLECT_BASE_URL:
-            extra_body["usage"] = {"include": True}
+            raise ValueError("Model name is required for Azure OpenAI client.")
 
         response = await self.async_client.chat.completions.create(
-            model=model, messages=messages, extra_body=extra_body
+            model=model,
+            messages=messages,
         )
         self._track_cost(response, model)
         return response.choices[0].message.content
