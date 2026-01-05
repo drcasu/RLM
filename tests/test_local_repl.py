@@ -349,3 +349,222 @@ class TestLocalREPLSecurityMemoryLimit:
         repl = LocalREPL(memory_limit_mb=0)
         assert repl.memory_limit_mb == 0
         repl.cleanup()
+
+
+class TestLocalREPLSecuritySafeGetattr:
+    """Tests for _safe_getattr security control."""
+
+    def test_safe_getattr_allows_normal_attribute(self):
+        """Test that normal attribute access via getattr is allowed."""
+        repl = LocalREPL()
+        result = repl.execute_code("""
+x = getattr([1, 2, 3], '__len__')()
+""")
+        assert result.stderr == ""
+        assert repl.locals["x"] == 3
+        repl.cleanup()
+
+    def test_safe_getattr_blocks_dunder_class(self):
+        """Test that getattr blocks __class__ access."""
+        repl = LocalREPL()
+        result = repl.execute_code("x = getattr([], '__class__')")
+        # Blocked by static analysis (Security) or runtime (_safe_getattr -> AttributeError)
+        assert "Security" in result.stderr or "AttributeError" in result.stderr
+        assert "__class__" in result.stderr
+        repl.cleanup()
+
+    def test_safe_getattr_blocks_dunder_globals(self):
+        """Test that getattr blocks __globals__ access."""
+        repl = LocalREPL()
+        result = repl.execute_code("""
+def f(): pass
+x = getattr(f, '__globals__')
+""")
+        # Blocked by static analysis (Security) or runtime (_safe_getattr -> AttributeError)
+        assert "Security" in result.stderr or "AttributeError" in result.stderr
+        assert "__globals__" in result.stderr
+        repl.cleanup()
+
+    def test_safe_getattr_blocks_dunder_code(self):
+        """Test that getattr blocks __code__ access."""
+        repl = LocalREPL()
+        result = repl.execute_code("""
+def f(): pass
+x = getattr(f, '__code__')
+""")
+        # Blocked by static analysis (Security) or runtime (_safe_getattr -> AttributeError)
+        assert "Security" in result.stderr or "AttributeError" in result.stderr
+        assert "__code__" in result.stderr
+        repl.cleanup()
+
+    def test_safe_getattr_blocks_dunder_subclasses(self):
+        """Test that getattr blocks __subclasses__ access."""
+        repl = LocalREPL()
+        result = repl.execute_code("x = getattr(object, '__subclasses__')")
+        # Blocked by static analysis (Security) or runtime (_safe_getattr -> AttributeError)
+        assert "Security" in result.stderr or "AttributeError" in result.stderr
+        assert "__subclasses__" in result.stderr
+        repl.cleanup()
+
+    def test_safe_getattr_blocks_dunder_builtins(self):
+        """Test that getattr blocks __builtins__ access."""
+        repl = LocalREPL()
+        result = repl.execute_code("x = getattr({}, '__builtins__', None)")
+        # Blocked by static analysis (Security) or runtime (_safe_getattr -> AttributeError)
+        assert "Security" in result.stderr or "AttributeError" in result.stderr
+        assert "__builtins__" in result.stderr
+        repl.cleanup()
+
+    def test_safe_getattr_with_default_on_blocked_attr(self):
+        """Test that getattr with default still blocks dangerous attributes."""
+        repl = LocalREPL()
+        result = repl.execute_code("x = getattr({}, '__class__', 'safe_default')")
+        # Blocked by static analysis (Security) or runtime (_safe_getattr -> AttributeError)
+        assert "Security" in result.stderr or "AttributeError" in result.stderr
+        assert "__class__" in result.stderr
+        repl.cleanup()
+
+    def test_safe_getattr_runtime_with_dynamic_attr(self):
+        """Test that _safe_getattr blocks dynamic dangerous attribute access at runtime."""
+        repl = LocalREPL()
+        # Use dynamic attribute name to bypass static analysis - runtime must catch this
+        result = repl.execute_code("""
+attr_name = '__' + 'class' + '__'
+x = getattr([], attr_name)
+""")
+        assert "AttributeError" in result.stderr
+        assert "blocked" in result.stderr.lower()
+        repl.cleanup()
+
+    def test_safe_setattr_runtime_with_dynamic_attr(self):
+        """Test that _safe_setattr blocks dynamic dangerous attribute setting at runtime."""
+        repl = LocalREPL()
+        # Use dynamic attribute name to bypass static analysis - runtime must catch this
+        result = repl.execute_code("""
+import types
+obj = types.SimpleNamespace()
+attr_name = '__' + 'dict' + '__'
+setattr(obj, attr_name, {})
+""")
+        assert "AttributeError" in result.stderr
+        assert "blocked" in result.stderr.lower()
+        repl.cleanup()
+
+
+class TestLocalREPLSecuritySafeSetattr:
+    """Tests for _safe_setattr security control."""
+
+    def test_safe_setattr_allows_normal_attribute(self):
+        """Test that normal attribute setting via setattr is allowed."""
+        repl = LocalREPL()
+        # Use an object with __dict__ that allows setting attributes
+        result = repl.execute_code("""
+import types
+obj = types.SimpleNamespace()
+setattr(obj, 'name', 'test')
+x = obj.name
+""")
+        assert result.stderr == ""
+        assert repl.locals["x"] == "test"
+        repl.cleanup()
+
+    def test_safe_setattr_blocks_dunder_class(self):
+        """Test that setattr blocks __class__ modification."""
+        repl = LocalREPL()
+        result = repl.execute_code("""
+import types
+obj = types.SimpleNamespace()
+setattr(obj, '__class__', object)
+""")
+        assert "AttributeError" in result.stderr
+        assert "blocked" in result.stderr.lower() or "__class__" in result.stderr
+        repl.cleanup()
+
+    def test_safe_setattr_blocks_dunder_dict(self):
+        """Test that setattr blocks __dict__ modification."""
+        repl = LocalREPL()
+        result = repl.execute_code("""
+import types
+obj = types.SimpleNamespace()
+setattr(obj, '__dict__', {})
+""")
+        assert "AttributeError" in result.stderr
+        assert "blocked" in result.stderr.lower() or "__dict__" in result.stderr
+        repl.cleanup()
+
+
+class TestLocalREPLSecurityNetworkBlocking:
+    """Tests for network module import blocking."""
+
+    def test_blocks_urllib_import(self):
+        """Test that urllib import is blocked."""
+        repl = LocalREPL()
+        result = repl.execute_code("import urllib")
+        assert "Security" in result.stderr or "ImportError" in result.stderr
+        repl.cleanup()
+
+    def test_blocks_http_import(self):
+        """Test that http module import is blocked."""
+        repl = LocalREPL()
+        result = repl.execute_code("import http")
+        assert "Security" in result.stderr or "ImportError" in result.stderr
+        repl.cleanup()
+
+    def test_blocks_urllib_request_from_import(self):
+        """Test that from urllib.request import is blocked."""
+        repl = LocalREPL()
+        result = repl.execute_code("from urllib.request import urlopen")
+        assert "Security" in result.stderr or "ImportError" in result.stderr
+        repl.cleanup()
+
+    def test_blocks_http_client_from_import(self):
+        """Test that from http.client import is blocked."""
+        repl = LocalREPL()
+        result = repl.execute_code("from http.client import HTTPConnection")
+        assert "Security" in result.stderr or "ImportError" in result.stderr
+        repl.cleanup()
+
+
+class TestLocalREPLSecurityTmpfs:
+    """Tests for tmpfs temp directory support."""
+
+    def test_tmpfs_disabled_by_default(self):
+        """Test that tmpfs is disabled by default."""
+        repl = LocalREPL()
+        assert repl.use_tmpfs is False
+        assert repl._tmpfs_mounted is False
+        repl.cleanup()
+
+    def test_tmpfs_can_be_enabled(self):
+        """Test that tmpfs can be enabled via parameter."""
+        repl = LocalREPL(use_tmpfs=True)
+        assert repl.use_tmpfs is True
+        # On non-Linux or without privileges, it may not be mounted
+        # but the parameter should be set
+        repl.cleanup()
+
+    def test_tmpfs_size_configurable(self):
+        """Test that tmpfs size can be configured."""
+        repl = LocalREPL(use_tmpfs=True, tmpfs_size_mb=128)
+        assert repl.tmpfs_size_mb == 128
+        repl.cleanup()
+
+    def test_tmpfs_default_size(self):
+        """Test that tmpfs has a default size."""
+        repl = LocalREPL()
+        assert repl.tmpfs_size_mb == 64  # DEFAULT_TMPFS_SIZE_MB
+        repl.cleanup()
+
+    def test_temp_dir_still_works_with_tmpfs_enabled(self):
+        """Test that temp dir operations work when tmpfs is requested."""
+        repl = LocalREPL(use_tmpfs=True)
+        # Should still be able to write files regardless of tmpfs mount status
+        result = repl.execute_code("""
+with open('test.txt', 'w') as f:
+    f.write('hello')
+with open('test.txt', 'r') as f:
+    content = f.read()
+""")
+        assert result.stderr == ""
+        assert repl.locals["content"] == "hello"
+        repl.cleanup()

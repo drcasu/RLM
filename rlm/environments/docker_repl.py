@@ -187,7 +187,7 @@ class DockerREPL(NonIsolatedEnv):
         lm_handler_address: tuple[str, int] | None = None,
         context_payload: dict | list | str | None = None,
         setup_code: str | None = None,
-        network_disabled: bool = False,
+        network_disabled: bool = True,
         **kwargs,
     ):
         """Initialize DockerREPL with security controls.
@@ -197,8 +197,9 @@ class DockerREPL(NonIsolatedEnv):
             lm_handler_address: Optional (host, port) tuple for LM handler.
             context_payload: Optional context to load into environment.
             setup_code: Optional code to run during setup.
-            network_disabled: If True, disable all network access in container.
-                Note: This also disables llm_query() calls to the host.
+            network_disabled: If True (default), disable all network access in container.
+                Note: This also disables llm_query() calls to the host. Set to False
+                if you need LLM access from within the container.
         """
         super().__init__(**kwargs)
 

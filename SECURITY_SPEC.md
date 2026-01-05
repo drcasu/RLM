@@ -192,15 +192,15 @@ if not is_safe:
 | 4 | No memory limits - code can allocate unlimited memory | `local_repl.py` | `memory_limit_mb` param (default 512MB) via `resource.setrlimit()` on Linux/Mac | ✅ Fixed |
 | 5 | Docker container runs as root | `docker_repl.py` | Added `--user 1000:1000`, `--read-only`, `--network=none` option | ✅ Fixed |
 
-### 🟠 High Priority
+### 🟠 High Priority — ✅ COMPLETED
 
-| # | Issue | Location | Proposed Fix |
-|---|-------|----------|--------------|
-| 6 | Network access unrestricted | `_SAFE_BUILTINS` | Block `socket`, `requests`, `urllib`, `http` module imports |
-| 7 | `getattr`/`setattr` allowed - can escape sandbox | `local_repl.py` L65-68 | Remove or wrap with attribute blocklist |
-| 8 | No code sanitization - raw LLM output to `exec()` | `local_repl.py` L273 | Add AST analysis before execution |
-| 9 | Docker network access - container can reach internet | `docker_repl.py` L225 | Add `--network=none` or isolated network |
-| 10 | Temp directory on host filesystem | `local_repl.py` L118 | Use tmpfs or memory-backed storage |
+| # | Issue | Location | Fix | Status |
+|---|-------|----------|-----|--------|
+| 6 | Network access unrestricted | `code_safety.py`, `local_repl.py` | `socket`, `requests`, `urllib`, `http` blocked in `DANGEROUS_MODULES` and `_safe_import()` | ✅ Fixed |
+| 7 | `getattr`/`setattr` allowed - can escape sandbox | `local_repl.py` | `_safe_getattr()` and `_safe_setattr()` block access to `DANGEROUS_ATTRIBUTES` | ✅ Fixed |
+| 8 | No code sanitization - raw LLM output to `exec()` | `local_repl.py`, `docker_repl.py` | `check_code_safety()` called before `exec()` in both environments | ✅ Fixed |
+| 9 | Docker network access - container can reach internet | `docker_repl.py` | `network_disabled=True` by default, adds `--network=none` | ✅ Fixed |
+| 10 | Temp directory on host filesystem | `local_repl.py` | `use_tmpfs=True` option mounts tmpfs for temp directory (Linux only) | ✅ Fixed |
 
 ### 🟡 Medium Priority
 

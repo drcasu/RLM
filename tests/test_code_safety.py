@@ -124,6 +124,18 @@ class TestDangerousImports:
         assert not result.is_safe
         assert "requests" in result.reason
 
+    def test_import_urllib(self):
+        code = "import urllib"
+        result = check_code_safety(code)
+        assert not result.is_safe
+        assert "urllib" in result.reason
+
+    def test_import_http(self):
+        code = "import http"
+        result = check_code_safety(code)
+        assert not result.is_safe
+        assert "http" in result.reason
+
     def test_import_ctypes(self):
         code = "import ctypes"
         result = check_code_safety(code)

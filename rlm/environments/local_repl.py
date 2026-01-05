@@ -14,7 +14,11 @@ from typing import Any
 from rlm.core.comms_utils import LMRequest, send_lm_request, send_lm_request_batched
 from rlm.core.types import REPLResult, RLMChatCompletion
 from rlm.environments.base_env import NonIsolatedEnv
-from rlm.utils.code_safety import DANGEROUS_MODULES, check_code_safety
+from rlm.utils.code_safety import (
+    DANGEROUS_ATTRIBUTES,
+    DANGEROUS_MODULES,
+    check_code_safety,
+)
 
 # =============================================================================
 # Execution Timeout Error
@@ -99,6 +103,46 @@ def _create_safe_open(allowed_base_path: str):
         return open(file, mode, *args, **kwargs)
 
     return _safe_open
+
+
+def _create_safe_getattr(blocked_attributes: frozenset[str]):
+    """Create a restricted getattr function that blocks dangerous attributes.
+
+    Args:
+        blocked_attributes: Set of attribute names to block.
+
+    Returns:
+        A wrapped getattr function that raises AttributeError for blocked attributes.
+    """
+
+    def _safe_getattr(obj, name: str, *default):
+        if name in blocked_attributes:
+            raise AttributeError(
+                f"Access to attribute '{name}' is blocked for security reasons"
+            )
+        return getattr(obj, name, *default)
+
+    return _safe_getattr
+
+
+def _create_safe_setattr(blocked_attributes: frozenset[str]):
+    """Create a restricted setattr function that blocks dangerous attributes.
+
+    Args:
+        blocked_attributes: Set of attribute names to block.
+
+    Returns:
+        A wrapped setattr function that raises AttributeError for blocked attributes.
+    """
+
+    def _safe_setattr(obj, name: str, value):
+        if name in blocked_attributes:
+            raise AttributeError(
+                f"Setting attribute '{name}' is blocked for security reasons"
+            )
+        return setattr(obj, name, value)
+
+    return _safe_setattr
 
 
 # =============================================================================
@@ -206,12 +250,15 @@ class LocalREPL(NonIsolatedEnv):
     Security features:
         - Blocked dangerous imports via _safe_import
         - File access restricted to temp_dir via _safe_open
+        - Safe getattr/setattr blocking dangerous attribute access
         - Configurable execution timeout (default 30s)
         - Memory limits on Linux/Mac via resource.setrlimit()
+        - Optional tmpfs-backed temp directory for isolation (Linux only)
     """
 
     DEFAULT_TIMEOUT: int = 30
     DEFAULT_MEMORY_LIMIT_MB: int = 512
+    DEFAULT_TMPFS_SIZE_MB: int = 64
 
     def __init__(
         self,
@@ -220,6 +267,8 @@ class LocalREPL(NonIsolatedEnv):
         setup_code: str | None = None,
         execution_timeout: int | None = None,
         memory_limit_mb: int | None = None,
+        use_tmpfs: bool = False,
+        tmpfs_size_mb: int | None = None,
         **kwargs,
     ):
         """Initialize LocalREPL with security controls.
@@ -232,13 +281,23 @@ class LocalREPL(NonIsolatedEnv):
                 Set to None or 0 to disable timeout.
             memory_limit_mb: Memory limit in MB for code execution (default 512MB).
                 Only enforced on Linux/Mac. Set to None or 0 to disable.
+            use_tmpfs: If True, use tmpfs (memory-backed) storage for temp directory.
+                Only supported on Linux. Provides better isolation as data never
+                touches disk. Defaults to False for backward compatibility.
+            tmpfs_size_mb: Size limit for tmpfs in MB (default 64MB). Only used
+                when use_tmpfs=True.
         """
         super().__init__(**kwargs)
 
         self.lm_handler_address = lm_handler_address
         self.original_cwd = os.getcwd()
-        self.temp_dir = tempfile.mkdtemp(prefix=f"repl_env_{uuid.uuid4()}_")
         self._lock = threading.Lock()
+        self.use_tmpfs = use_tmpfs
+        self.tmpfs_size_mb = tmpfs_size_mb if tmpfs_size_mb is not None else self.DEFAULT_TMPFS_SIZE_MB
+        self._tmpfs_mounted = False
+
+        # Create temp directory (potentially on tmpfs)
+        self.temp_dir = self._create_temp_dir()
 
         # Security configuration
         self.execution_timeout = (
@@ -259,16 +318,52 @@ class LocalREPL(NonIsolatedEnv):
         if setup_code:
             self.execute_code(setup_code)
 
+    def _create_temp_dir(self) -> str:
+        """Create temporary directory, optionally on tmpfs for isolation.
+
+        Returns:
+            Path to the created temporary directory.
+        """
+        temp_dir = tempfile.mkdtemp(prefix=f"repl_env_{uuid.uuid4()}_")
+
+        if self.use_tmpfs and platform.system() == "Linux":
+            try:
+                import subprocess
+
+                # Mount tmpfs on the temp directory
+                mount_cmd = [
+                    "mount",
+                    "-t",
+                    "tmpfs",
+                    "-o",
+                    f"size={self.tmpfs_size_mb}M,mode=0700",
+                    "tmpfs",
+                    temp_dir,
+                ]
+                result = subprocess.run(mount_cmd, capture_output=True, text=True)
+                if result.returncode == 0:
+                    self._tmpfs_mounted = True
+                # If mount fails (e.g., no privileges), continue with regular temp dir
+            except Exception:
+                # Fall back to regular temp directory
+                pass
+
+        return temp_dir
+
     def setup(self):
         """Setup the environment with security-hardened builtins."""
-        # Create safe versions of import and open
+        # Create safe versions of import, open, getattr, and setattr
         safe_import = _create_safe_import(DANGEROUS_MODULES)
         safe_open = _create_safe_open(self.temp_dir)
+        safe_getattr = _create_safe_getattr(DANGEROUS_ATTRIBUTES)
+        safe_setattr = _create_safe_setattr(DANGEROUS_ATTRIBUTES)
 
-        # Create hardened builtins with safe import/open
+        # Create hardened builtins with safe import/open/getattr/setattr
         safe_builtins = _SAFE_BUILTINS.copy()
         safe_builtins["__import__"] = safe_import
         safe_builtins["open"] = safe_open
+        safe_builtins["getattr"] = safe_getattr
+        safe_builtins["setattr"] = safe_setattr
 
         # Create sandboxed globals
         self.globals: dict[str, Any] = {
@@ -521,8 +616,15 @@ class LocalREPL(NonIsolatedEnv):
         return False
 
     def cleanup(self):
-        """Clean up temp directory and reset state."""
+        """Clean up temp directory (unmount tmpfs if used) and reset state."""
         try:
+            # Unmount tmpfs if it was mounted
+            if self._tmpfs_mounted and platform.system() == "Linux":
+                import subprocess
+
+                subprocess.run(["umount", self.temp_dir], capture_output=True)
+                self._tmpfs_mounted = False
+
             shutil.rmtree(self.temp_dir)
         except Exception:
             pass
