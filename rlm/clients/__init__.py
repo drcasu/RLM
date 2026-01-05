@@ -44,7 +44,11 @@ def get_client(
         from rlm.clients.anthropic import AnthropicClient
 
         return AnthropicClient(**backend_kwargs)
+    elif backend == "gemini":
+        from rlm.clients.gemini import GeminiClient
+
+        return GeminiClient(**backend_kwargs)
     else:
         raise ValueError(
-            f"Unknown backend: {backend}. Supported backends: ['openai', 'vllm', 'portkey', 'openrouter', 'litellm', 'anthropic']"
+            f"Unknown backend: {backend}. Supported backends: ['openai', 'vllm', 'portkey', 'openrouter', 'litellm', 'anthropic', 'gemini']"
         )
