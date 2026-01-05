@@ -2,11 +2,14 @@ import os
 from collections import defaultdict
 from typing import Any
 
+from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
 from rlm.clients.base_lm import BaseLM
 from rlm.core.types import ModelUsageSummary, UsageSummary
+
+load_dotenv()
 
 DEFAULT_GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
