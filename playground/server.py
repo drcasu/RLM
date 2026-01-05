@@ -1,6 +1,8 @@
 """FastAPI server for RLM playground."""
 
+import io
 import os
+import sys
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -56,25 +58,47 @@ def run_rlm(request: RunRequest) -> RunResponse:
             log_dir = os.getenv("RLM_LOG_DIR", "./logs")
             logger = RLMLogger(log_dir=log_dir)
 
-        # Create RLM instance
-        rlm = RLM(
-            backend=request.backend,
-            backend_kwargs=request.backend_kwargs or {},
-            environment=request.environment,
-            environment_kwargs=request.environment_kwargs or {},
-            max_depth=request.max_depth,
-            max_iterations=request.max_iterations,
-            other_backends=request.other_backends,
-            other_backend_kwargs=request.other_backend_kwargs,
-            logger=logger,
-            verbose=False,  # Disable console output in API
-        )
+        # Capture verbose output if enabled
+        verbose_output = None
+        if request.verbose:
+            stdout_capture = io.StringIO()
+            stderr_capture = io.StringIO()
+            old_stdout = sys.stdout
+            old_stderr = sys.stderr
 
-        # Run completion
-        result = rlm.completion(
-            prompt=request.prompt,
-            root_prompt=request.root_prompt,
-        )
+        try:
+            if request.verbose:
+                sys.stdout = stdout_capture
+                sys.stderr = stderr_capture
+
+            # Create RLM instance
+            rlm = RLM(
+                backend=request.backend,
+                backend_kwargs=request.backend_kwargs or {},
+                environment=request.environment,
+                environment_kwargs=request.environment_kwargs or {},
+                max_depth=request.max_depth,
+                max_iterations=request.max_iterations,
+                other_backends=request.other_backends,
+                other_backend_kwargs=request.other_backend_kwargs,
+                custom_system_prompt=request.custom_system_prompt,
+                logger=logger,
+                verbose=request.verbose,
+            )
+
+            # Run completion
+            result = rlm.completion(
+                prompt=request.prompt,
+                root_prompt=request.root_prompt,
+            )
+        finally:
+            # Restore stdout/stderr and capture output
+            if request.verbose:
+                sys.stdout = old_stdout
+                sys.stderr = old_stderr
+                stdout_text = stdout_capture.getvalue()
+                stderr_text = stderr_capture.getvalue()
+                verbose_output = stdout_text + stderr_text if stderr_text else stdout_text
 
         # Extract response - handle both string and tuple (type, content) formats
         response_text = result.response
@@ -104,6 +128,7 @@ def run_rlm(request: RunRequest) -> RunResponse:
             root_model=result.root_model,
             execution_time=result.execution_time,
             usage_summary=result.usage_summary.to_dict(),
+            verbose_output=verbose_output,
             error=None,
         )
 
@@ -115,5 +140,6 @@ def run_rlm(request: RunRequest) -> RunResponse:
             root_model=None,
             execution_time=None,
             usage_summary=None,
+            verbose_output=None,
             error=str(e),
         )

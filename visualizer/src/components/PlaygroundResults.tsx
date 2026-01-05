@@ -10,6 +10,7 @@ interface RunResult {
   root_model: string | null;
   execution_time: number | null;
   usage_summary: Record<string, any> | null;
+  verbose_output: string | null;
   error: string | null;
 }
 
@@ -129,6 +130,18 @@ export function PlaygroundResults({ result, loading }: PlaygroundResultsProps) {
                 <p className="text-sm text-muted-foreground">No usage data available</p>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Verbose Output */}
+        {result.verbose_output && (
+          <div className="space-y-2">
+            <h3 className="font-semibold text-sm">Verbose Output</h3>
+            <ScrollArea className="h-[400px] w-full rounded-md border border-input p-4 bg-muted/30">
+              <pre className="text-xs font-mono whitespace-pre-wrap break-words">
+                {result.verbose_output}
+              </pre>
+            </ScrollArea>
           </div>
         )}
 

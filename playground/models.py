@@ -32,6 +32,10 @@ class RunRequest(BaseModel):
     other_backend_kwargs: list[dict[str, Any]] | None = Field(
         None, description="Configuration for additional backends"
     )
+    custom_system_prompt: str | None = Field(
+        None, description="Custom system prompt to override the default"
+    )
+    verbose: bool = Field(False, description="Enable verbose console output")
     enable_logging: bool = Field(False, description="Whether to save logs to file")
 
 
@@ -43,4 +47,5 @@ class RunResponse(BaseModel):
     root_model: str | None = Field(None, description="Model name used")
     execution_time: float | None = Field(None, description="Total execution time in seconds")
     usage_summary: dict[str, Any] | None = Field(None, description="Token usage summary per model")
+    verbose_output: str | None = Field(None, description="Captured verbose console output")
     error: str | None = Field(None, description="Error message if completion failed")
