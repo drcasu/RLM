@@ -82,13 +82,19 @@ class OpenAIClient(BaseLM):
 
     def _track_cost(self, response: openai.ChatCompletion, model: str):
         self.model_call_counts[model] += 1
-        self.model_input_tokens[model] += response.usage.prompt_tokens
-        self.model_output_tokens[model] += response.usage.completion_tokens
-        self.model_total_tokens[model] += response.usage.total_tokens
+
+        usage = getattr(response, "usage", None)
+        prompt_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
+        completion_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+        total_tokens = getattr(usage, "total_tokens", 0) if usage else 0
+
+        self.model_input_tokens[model] += prompt_tokens
+        self.model_output_tokens[model] += completion_tokens
+        self.model_total_tokens[model] += total_tokens
 
         # Track last call for handler to read
-        self.last_prompt_tokens = response.usage.prompt_tokens
-        self.last_completion_tokens = response.usage.completion_tokens
+        self.last_prompt_tokens = prompt_tokens
+        self.last_completion_tokens = completion_tokens
 
     def get_usage_summary(self) -> UsageSummary:
         model_summaries = {}
