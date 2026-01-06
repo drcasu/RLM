@@ -8,10 +8,9 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from playground.models import RunRequest, RunResponse
 from rlm import RLM
 from rlm.logger import RLMLogger
-
-from playground.models import RunRequest, RunResponse
 
 # Load environment variables
 load_dotenv()
