@@ -102,173 +102,212 @@ export function PlaygroundForm({ onRun, loading }: PlaygroundFormProps) {
     <Card className="border-border bg-card/50 backdrop-blur-sm">
       <CardContent className="pt-6">
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Backend Selection */}
-          <div className="space-y-2">
-            <label htmlFor="backend" className="text-[10px] font-mono font-medium text-muted-foreground uppercase tracking-wider">
-              Backend
-            </label>
-            <select
-              id="backend"
-              value={backend}
-              onChange={(e) => setBackend(e.target.value)}
-              className="w-full px-3 py-2 bg-muted/30 border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
-              disabled={loading}
-            >
-              <option value="openai">OpenAI</option>
-              <option value="anthropic">Anthropic</option>
-              <option value="portkey">Portkey</option>
-              <option value="openrouter">OpenRouter</option>
-              <option value="vllm">vLLM</option>
-              <option value="litellm">LiteLLM</option>
-            </select>
-          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
+            <div className="space-y-6">
+              {/* Backend Selection */}
+              <div className="space-y-2">
+                <label htmlFor="backend" className="text-[10px] font-mono font-medium text-muted-foreground uppercase tracking-wider">
+                  Backend
+                </label>
+                <select
+                  id="backend"
+                  value={backend}
+                  onChange={(e) => setBackend(e.target.value)}
+                  className="w-full px-3 py-2 bg-muted/30 border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+                  disabled={loading}
+                >
+                  <option value="openai">OpenAI</option>
+                  <option value="anthropic">Anthropic</option>
+                  <option value="portkey">Portkey</option>
+                  <option value="openrouter">OpenRouter</option>
+                  <option value="vllm">vLLM</option>
+                  <option value="litellm">LiteLLM</option>
+                </select>
+              </div>
 
-          {/* Backend Kwargs */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-mono font-medium text-muted-foreground uppercase tracking-wider">Backend Kwargs</label>
-            <p className="text-[10px] text-muted-foreground/60 font-mono italic">
-              Key-value pairs for backend configuration (e.g., model_name, api_key)
-            </p>
-            <div className="rounded-md border border-border bg-muted/10 p-2">
-              <KeyValueEditor
-                pairs={backendKwargs}
-                onChange={setBackendKwargs}
-                disabled={loading}
-                keyPlaceholder="e.g., model_name"
-                valuePlaceholder="e.g., gpt-5-nano"
-              />
+              {/* Backend Kwargs */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-mono font-medium text-muted-foreground uppercase tracking-wider">Backend Kwargs</label>
+                <p className="text-[10px] text-muted-foreground/60 font-mono italic">
+                  Key-value pairs for backend configuration (e.g., model_name, api_key)
+                </p>
+                <div className="rounded-md border border-border bg-muted/10 p-2">
+                  <KeyValueEditor
+                    pairs={backendKwargs}
+                    onChange={setBackendKwargs}
+                    disabled={loading}
+                    keyPlaceholder="e.g., model_name"
+                    valuePlaceholder="e.g., gpt-5-nano"
+                  />
+                </div>
+              </div>
+
+              {/* Environment */}
+              <div className="space-y-2">
+                <label htmlFor="environment" className="text-[10px] font-mono font-medium text-muted-foreground uppercase tracking-wider">
+                  Environment
+                </label>
+                <select
+                  id="environment"
+                  value={environment}
+                  onChange={(e) => setEnvironment(e.target.value)}
+                  className="w-full px-3 py-2 bg-muted/30 border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+                  disabled={loading}
+                >
+                  <option value="local">Local</option>
+                  <option value="modal">Modal</option>
+                  <option value="prime">Prime</option>
+                </select>
+              </div>
+
+              {/* Environment Kwargs */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-mono font-medium text-muted-foreground uppercase tracking-wider">Environment Kwargs</label>
+                <div className="rounded-md border border-border bg-muted/10 p-2">
+                  <KeyValueEditor
+                    pairs={environmentKwargs}
+                    onChange={setEnvironmentKwargs}
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+
+              {/* Custom System Prompt */}
+              <div className="space-y-2">
+                <label htmlFor="customSystemPrompt" className="text-[10px] font-mono font-medium text-muted-foreground uppercase tracking-wider">
+                  Custom System Prompt (optional)
+                </label>
+                <textarea
+                  id="customSystemPrompt"
+                  value={customSystemPrompt}
+                  onChange={(e) => setCustomSystemPrompt(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 bg-muted/30 border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary resize-y"
+                  placeholder="Override the default RLM system prompt..."
+                  disabled={loading}
+                />
+              </div>
             </div>
-          </div>
 
-          {/* Environment */}
-          <div className="space-y-2">
-            <label htmlFor="environment" className="text-[10px] font-mono font-medium text-muted-foreground uppercase tracking-wider">
-              Environment
-            </label>
-            <select
-              id="environment"
-              value={environment}
-              onChange={(e) => setEnvironment(e.target.value)}
-              className="w-full px-3 py-2 bg-muted/30 border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
-              disabled={loading}
-            >
-              <option value="local">Local</option>
-              <option value="modal">Modal</option>
-              <option value="prime">Prime</option>
-            </select>
-          </div>
+            <div className="space-y-6">
+              {/* Prompt */}
+              <div className="space-y-2">
+                <label htmlFor="prompt" className="text-[10px] font-mono font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                  <span className="text-primary">▶</span> Prompt
+                </label>
+                <textarea
+                  id="prompt"
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  rows={5}
+                  className="w-full px-3 py-2 bg-muted/30 border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary resize-y leading-relaxed"
+                  placeholder="Enter your prompt here..."
+                  disabled={loading}
+                  required
+                />
+              </div>
 
-          {/* Environment Kwargs */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-mono font-medium text-muted-foreground uppercase tracking-wider">Environment Kwargs</label>
-            <div className="rounded-md border border-border bg-muted/10 p-2">
-              <KeyValueEditor
-                pairs={environmentKwargs}
-                onChange={setEnvironmentKwargs}
+              {/* Root Prompt */}
+              <div className="space-y-2">
+                <label htmlFor="rootPrompt" className="text-[10px] font-mono font-medium text-muted-foreground uppercase tracking-wider">
+                  Root Prompt (optional hint)
+                </label>
+                <input
+                  id="rootPrompt"
+                  type="text"
+                  value={rootPrompt}
+                  onChange={(e) => setRootPrompt(e.target.value)}
+                  className="w-full px-3 py-2 bg-muted/30 border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+                  placeholder="e.g. Solve the following math problem..."
+                  disabled={loading}
+                />
+              </div>
+
+              {/* Max Iterations & Depth */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label htmlFor="maxIterations" className="text-[10px] font-mono font-medium text-muted-foreground uppercase tracking-wider">
+                    Max Iterations
+                  </label>
+                  <input
+                    id="maxIterations"
+                    type="number"
+                    value={maxIterations}
+                    onChange={(e) => setMaxIterations(parseInt(e.target.value) || 30)}
+                    min={1}
+                    max={100}
+                    className="w-full px-3 py-2 bg-muted/30 border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+                    disabled={loading}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="maxDepth" className="text-[10px] font-mono font-medium text-muted-foreground uppercase tracking-wider">
+                    Max Depth
+                  </label>
+                  <select
+                    id="maxDepth"
+                    value={maxDepth}
+                    onChange={(e) => setMaxDepth(parseInt(e.target.value))}
+                    className="w-full px-3 py-2 bg-muted/30 border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+                    disabled={loading}
+                  >
+                    <option value={0}>0 (None)</option>
+                    <option value={1}>1 (Recursive)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Toggles */}
+              <div className="flex flex-wrap gap-6 pt-2">
+                <div className="flex items-center space-x-2">
+                  <input
+                    id="verbose"
+                    type="checkbox"
+                    checked={verbose}
+                    onChange={(e) => setVerbose(e.target.checked)}
+                    className="w-4 h-4 rounded border-border bg-muted accent-primary"
+                    disabled={loading}
+                  />
+                  <label htmlFor="verbose" className="text-[11px] font-mono font-medium text-muted-foreground">
+                    VERBOSE_MODE
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    id="enableLogging"
+                    type="checkbox"
+                    checked={enableLogging}
+                    onChange={(e) => setEnableLogging(e.target.checked)}
+                    className="w-4 h-4 rounded border-border bg-muted accent-primary"
+                    disabled={loading}
+                  />
+                  <label htmlFor="enableLogging" className="text-[11px] font-mono font-medium text-muted-foreground">
+                    PERSIST_LOGS
+                  </label>
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <Button
+                type="submit"
                 disabled={loading}
-              />
-            </div>
-          </div>
-
-          {/* Prompt */}
-          <div className="space-y-2">
-            <label htmlFor="prompt" className="text-[10px] font-mono font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-              <span className="text-primary">▶</span> Prompt
-            </label>
-            <textarea
-              id="prompt"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              rows={6}
-              className="w-full px-3 py-2 bg-muted/30 border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary resize-y leading-relaxed"
-              placeholder="Enter your prompt here..."
-              disabled={loading}
-              required
-            />
-          </div>
-
-          {/* Max Iterations & Depth */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label htmlFor="maxIterations" className="text-[10px] font-mono font-medium text-muted-foreground uppercase tracking-wider">
-                Max Iterations
-              </label>
-              <input
-                id="maxIterations"
-                type="number"
-                value={maxIterations}
-                onChange={(e) => setMaxIterations(parseInt(e.target.value) || 30)}
-                min={1}
-                max={100}
-                className="w-full px-3 py-2 bg-muted/30 border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
-                disabled={loading}
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="maxDepth" className="text-[10px] font-mono font-medium text-muted-foreground uppercase tracking-wider">
-                Max Depth
-              </label>
-              <select
-                id="maxDepth"
-                value={maxDepth}
-                onChange={(e) => setMaxDepth(parseInt(e.target.value))}
-                className="w-full px-3 py-2 bg-muted/30 border border-border rounded-md text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
-                disabled={loading}
+                className={cn(
+                  "w-full font-mono text-xs tracking-widest uppercase py-6",
+                  "transition-all active:scale-[0.98]"
+                )}
               >
-                <option value={0}>0 (None)</option>
-                <option value={1}>1 (Recursive)</option>
-              </select>
+                {loading ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-background animate-pulse" />
+                    EXECUTING...
+                  </span>
+                ) : 'Run RLM Trace'}
+              </Button>
             </div>
           </div>
-
-          {/* Toggles */}
-          <div className="flex flex-wrap gap-6 pt-2">
-            <div className="flex items-center space-x-2">
-              <input
-                id="verbose"
-                type="checkbox"
-                checked={verbose}
-                onChange={(e) => setVerbose(e.target.checked)}
-                className="w-4 h-4 rounded border-border bg-muted accent-primary"
-                disabled={loading}
-              />
-              <label htmlFor="verbose" className="text-[11px] font-mono font-medium text-muted-foreground">
-                Enable verbose output capture? (console output)
-              </label>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <input
-                id="enableLogging"
-                type="checkbox"
-                checked={enableLogging}
-                onChange={(e) => setEnableLogging(e.target.checked)}
-                className="w-4 h-4 rounded border-border bg-muted accent-primary"
-                disabled={loading}
-              />
-              <label htmlFor="enableLogging" className="text-[11px] font-mono font-medium text-muted-foreground">
-                Enable logging to file? (JSONl for the trajectories)
-              </label>
-            </div>
-          </div>
-
-          {/* Submit Button */}
-          <Button
-            type="submit"
-            disabled={loading}
-            className={cn(
-              "w-full font-mono text-xs tracking-widest uppercase py-6",
-              "transition-all active:scale-[0.98]"
-            )}
-          >
-            {loading ? (
-              <span className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-background animate-pulse" />
-                EXECUTING...
-              </span>
-            ) : 'Run RLM Trace'}
-          </Button>
         </form>
+
       </CardContent>
     </Card>
   );

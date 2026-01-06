@@ -2,56 +2,15 @@
 
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { PlaygroundForm } from '@/components/PlaygroundForm';
-import { PlaygroundResults } from '@/components/PlaygroundResults';
-import { useState } from 'react';
+import { LiveLogViewer } from '@/components/LiveLogViewer';
+import { useLiveLog } from '@/hooks/useLiveLog';
 import Link from 'next/link';
 
-interface RunResult {
-  success: boolean;
-  response: string | null;
-  root_model: string | null;
-  execution_time: number | null;
-  usage_summary: Record<string, any> | null;
-  error: string | null;
-}
-
 export default function PlaygroundPage() {
-  const [result, setResult] = useState<RunResult | null>(null);
-  const [loading, setLoading] = useState(false);
+  const { state, startStream, cancel, reset } = useLiveLog();
 
   const handleRun = async (config: any) => {
-    setLoading(true);
-    setResult(null);
-
-    try {
-      const apiUrl = process.env.NEXT_PUBLIC_PLAYGROUND_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${apiUrl}/api/run`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(config),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      setResult(data);
-    } catch (error) {
-      setResult({
-        success: false,
-        response: null,
-        root_model: null,
-        execution_time: null,
-        usage_summary: null,
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
-      });
-    } finally {
-      setLoading(false);
-    }
+    await startStream(config);
   };
 
   return (
@@ -98,21 +57,37 @@ export default function PlaygroundPage() {
 
         {/* Main Content */}
         <main className="max-w-7xl mx-auto px-6 py-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+          <div className="space-y-12">
             <div className="space-y-4">
               <h2 className="text-sm font-medium mb-3 flex items-center gap-2 text-muted-foreground">
                 <span className="text-primary font-mono">01</span>
                 Configuration
               </h2>
-              <PlaygroundForm onRun={handleRun} loading={loading} />
+              <PlaygroundForm 
+                onRun={handleRun} 
+                loading={state.status === 'streaming' || state.status === 'connecting'} 
+              />
             </div>
 
             <div className="space-y-4">
-              <h2 className="text-sm font-medium mb-3 flex items-center gap-2 text-muted-foreground">
-                <span className="text-primary font-mono">02</span>
-                Execution Results
-              </h2>
-              <PlaygroundResults result={result} loading={loading} />
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                  <span className="text-primary font-mono">02</span>
+                  Live Trace Viewer
+                </h2>
+                {state.status !== 'idle' && state.status !== 'streaming' && state.status !== 'connecting' && (
+                  <button 
+                    onClick={reset}
+                    className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-primary transition-colors flex items-center gap-2"
+                  >
+                    <span>↺</span> New Run
+                  </button>
+                )}
+              </div>
+              <LiveLogViewer 
+                state={state} 
+                onCancel={cancel}
+              />
             </div>
           </div>
         </main>

@@ -49,3 +49,10 @@ class RunResponse(BaseModel):
     usage_summary: dict[str, Any] | None = Field(None, description="Token usage summary per model")
     verbose_output: str | None = Field(None, description="Captured verbose console output")
     error: str | None = Field(None, description="Error message if completion failed")
+
+
+class StreamEvent(BaseModel):
+    """Base model for streaming events."""
+
+    event: str = Field(..., description="Event type: metadata, iteration, complete, error")
+    data: dict[str, Any] = Field(..., description="Event data payload")
