@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { KeyValueEditor } from './KeyValueEditor';
+import { cn } from '@/lib/utils';
 
 interface PlaygroundFormProps {
   onRun: (config: any) => void;
@@ -98,11 +99,8 @@ export function PlaygroundForm({ onRun, loading }: PlaygroundFormProps) {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Configuration</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <Card className="border-border bg-card/50 backdrop-blur-sm">
+      <CardContent className="pt-6">
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Backend Selection */}
           <div className="space-y-2">

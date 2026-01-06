@@ -1,8 +1,9 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
 
 interface RunResult {
   success: boolean;
@@ -22,15 +23,15 @@ interface PlaygroundResultsProps {
 export function PlaygroundResults({ result, loading }: PlaygroundResultsProps) {
   if (loading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Results</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center py-8">
-            <div className="space-y-2 text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-              <p className="text-sm text-muted-foreground">Running RLM completion...</p>
+      <Card className="border-border bg-card/50 backdrop-blur-sm">
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-center py-12">
+            <div className="space-y-4 text-center">
+              <div className="relative mx-auto w-10 h-10">
+                <div className="absolute inset-0 animate-spin rounded-full border-b-2 border-primary"></div>
+                <div className="absolute inset-0 animate-ping rounded-full border border-primary/20"></div>
+              </div>
+              <p className="text-sm font-mono text-muted-foreground animate-pulse">EXECUTING RLM TRACE...</p>
             </div>
           </div>
         </CardContent>
@@ -40,15 +41,15 @@ export function PlaygroundResults({ result, loading }: PlaygroundResultsProps) {
 
   if (!result) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Results</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center py-8">
-            <p className="text-sm text-muted-foreground">
-              Submit a query to see results here
-            </p>
+      <Card className="border-border bg-card/50 backdrop-blur-sm border-dashed">
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center space-y-2">
+              <div className="text-4xl opacity-20 font-mono text-primary">◈</div>
+              <p className="text-sm text-muted-foreground font-mono">
+                Awaiting execution parameters...
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -57,14 +58,16 @@ export function PlaygroundResults({ result, loading }: PlaygroundResultsProps) {
 
   if (!result.success) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Results</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-lg border border-destructive bg-destructive/10 p-4">
-            <h3 className="font-semibold text-destructive mb-2">Error</h3>
-            <p className="text-sm text-destructive">{result.error || 'Unknown error occurred'}</p>
+      <Card className="border-destructive/50 bg-destructive/5 backdrop-blur-sm">
+        <CardContent className="pt-6 space-y-4">
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+            <h3 className="font-mono font-semibold text-destructive mb-2 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
+              EXECUTION_ERROR
+            </h3>
+            <pre className="text-xs font-mono text-destructive whitespace-pre-wrap">
+              {result.error || 'Unknown error occurred'}
+            </pre>
           </div>
         </CardContent>
       </Card>
@@ -72,62 +75,71 @@ export function PlaygroundResults({ result, loading }: PlaygroundResultsProps) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Results</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Success Badge */}
-        <div className="flex items-center gap-2">
-          <Badge variant="default" className="bg-green-600">
-            Success
-          </Badge>
-          {result.root_model && (
-            <Badge variant="outline">
-              {result.root_model}
-            </Badge>
-          )}
+    <Card className="border-border bg-card/50 backdrop-blur-sm">
+      <CardContent className="pt-6 space-y-6">
+        {/* Status Badge */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-primary/10 border border-primary/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+              <span className="text-[10px] font-mono text-primary font-bold">SUCCESS</span>
+            </div>
+            {result.root_model && (
+              <Badge variant="outline" className="font-mono text-[10px]">
+                {result.root_model}
+              </Badge>
+            )}
+          </div>
           {result.execution_time !== null && (
-            <Badge variant="outline">
-              {result.execution_time.toFixed(2)}s
-            </Badge>
+            <div className="text-[10px] font-mono text-muted-foreground">
+              TIME: {result.execution_time.toFixed(3)}s
+            </div>
           )}
         </div>
 
         {/* Response */}
-        <div className="space-y-2">
-          <h3 className="font-semibold text-sm">Response</h3>
-          <ScrollArea className="h-[300px] w-full rounded-md border border-input p-4">
-            <pre className="text-sm font-mono whitespace-pre-wrap break-words">
-              {result.response || 'No response'}
-            </pre>
-          </ScrollArea>
+        <div className="space-y-3">
+          <h3 className="text-[10px] font-mono font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+            <span className="text-primary">▶</span> Final Answer
+          </h3>
+          <div className="rounded-lg border border-border bg-muted/30 overflow-hidden">
+            <ScrollArea className="h-[300px] w-full p-4">
+              <pre className="text-sm font-mono whitespace-pre-wrap break-words leading-relaxed">
+                {result.response || 'No response'}
+              </pre>
+            </ScrollArea>
+          </div>
         </div>
 
         {/* Usage Summary */}
         {result.usage_summary && (
-          <div className="space-y-2">
-            <h3 className="font-semibold text-sm">Usage Summary</h3>
-            <div className="rounded-md border border-input p-4 space-y-2">
+          <div className="space-y-3">
+            <h3 className="text-[10px] font-mono font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+              <span className="text-primary">Σ</span> Usage Metrics
+            </h3>
+            <div className="grid grid-cols-1 gap-2">
               {result.usage_summary.model_usage_summaries ? (
                 Object.entries(result.usage_summary.model_usage_summaries).map(
                   ([model, usage]: [string, any]) => (
-                    <div key={model} className="space-y-1">
-                      <div className="font-medium text-sm">{model}</div>
-                      <div className="text-xs text-muted-foreground space-y-0.5 ml-4">
-                        <div>Calls: {usage.total_calls || 0}</div>
-                        <div>Input tokens: {usage.total_input_tokens || 0}</div>
-                        <div>Output tokens: {usage.total_output_tokens || 0}</div>
-                        <div>
-                          Total tokens:{' '}
-                          {(usage.total_input_tokens || 0) + (usage.total_output_tokens || 0)}
+                    <div key={model} className="p-3 rounded-md border border-border bg-muted/20 flex flex-wrap items-center justify-between gap-4">
+                      <div className="font-mono text-xs font-medium">{model}</div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-center">
+                          <div className="text-[10px] text-muted-foreground font-mono uppercase">Calls</div>
+                          <div className="text-xs font-mono">{usage.total_calls || 0}</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-[10px] text-muted-foreground font-mono uppercase">Tokens</div>
+                          <div className="text-xs font-mono">
+                            {(usage.total_input_tokens || 0) + (usage.total_output_tokens || 0)}
+                          </div>
                         </div>
                       </div>
                     </div>
                   )
                 )
               ) : (
-                <p className="text-sm text-muted-foreground">No usage data available</p>
+                <p className="text-[10px] font-mono text-muted-foreground italic">No metrics available</p>
               )}
             </div>
           </div>
@@ -135,20 +147,17 @@ export function PlaygroundResults({ result, loading }: PlaygroundResultsProps) {
 
         {/* Verbose Output */}
         {result.verbose_output && (
-          <div className="space-y-2">
-            <h3 className="font-semibold text-sm">Verbose Output</h3>
-            <ScrollArea className="h-[400px] w-full rounded-md border border-input p-4 bg-muted/30">
-              <pre className="text-xs font-mono whitespace-pre-wrap break-words">
-                {result.verbose_output}
-              </pre>
-            </ScrollArea>
-          </div>
-        )}
-
-        {/* Execution Time */}
-        {result.execution_time !== null && (
-          <div className="text-xs text-muted-foreground">
-            Execution time: {result.execution_time.toFixed(3)} seconds
+          <div className="space-y-3">
+            <h3 className="text-[10px] font-mono font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+              <span className="text-primary">◈</span> Trace Logs
+            </h3>
+            <div className="rounded-lg border border-border bg-black/40 overflow-hidden">
+              <ScrollArea className="h-[400px] w-full p-4">
+                <pre className="text-[11px] font-mono text-primary/80 whitespace-pre-wrap break-words leading-tight">
+                  {result.verbose_output}
+                </pre>
+              </ScrollArea>
+            </div>
           </div>
         )}
       </CardContent>
