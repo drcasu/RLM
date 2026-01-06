@@ -104,7 +104,7 @@ modal setup   # authenticate account
 
 To use [Prime Sandboxes](https://docs.primeintellect.ai/sandboxes/sdk), install the SDK and set your API key:
 ```bash
-uv pip install prime-sandboxes
+uv pip install -e ".[prime]"
 export PRIME_API_KEY=...
 ```
 
