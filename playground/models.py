@@ -36,7 +36,7 @@ class RunRequest(BaseModel):
         None, description="Custom system prompt to override the default"
     )
     verbose: bool = Field(False, description="Enable verbose console output")
-    enable_logging: bool = Field(False, description="Whether to save logs to file")
+    enable_logging: bool = Field(True, description="Whether to save logs to file")
 
 
 class RunResponse(BaseModel):

@@ -31,7 +31,6 @@ export function PlaygroundForm({ onRun, loading }: PlaygroundFormProps) {
   const [otherBackends, setOtherBackends] = useState<string[]>([]);
   const [otherBackendKwargs, setOtherBackendKwargs] = useState<KeyValuePair[][]>([]);
   const [verbose, setVerbose] = useState<boolean>(false);
-  const [enableLogging, setEnableLogging] = useState<boolean>(false);
 
   // Convert key-value pairs to object
   const pairsToObject = (pairs: KeyValuePair[]): Record<string, any> => {
@@ -65,7 +64,7 @@ export function PlaygroundForm({ onRun, loading }: PlaygroundFormProps) {
       max_iterations: maxIterations,
       max_depth: maxDepth,
       verbose: verbose,
-      enable_logging: enableLogging,
+      enable_logging: true,
     };
 
     if (customSystemPrompt.trim()) {
@@ -270,20 +269,6 @@ export function PlaygroundForm({ onRun, loading }: PlaygroundFormProps) {
                   />
                   <label htmlFor="verbose" className="text-[11px] font-mono font-medium text-muted-foreground">
                     VERBOSE_MODE
-                  </label>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <input
-                    id="enableLogging"
-                    type="checkbox"
-                    checked={enableLogging}
-                    onChange={(e) => setEnableLogging(e.target.checked)}
-                    className="w-4 h-4 rounded border-border bg-muted accent-primary"
-                    disabled={loading}
-                  />
-                  <label htmlFor="enableLogging" className="text-[11px] font-mono font-medium text-muted-foreground">
-                    PERSIST_LOGS
                   </label>
                 </div>
               </div>
