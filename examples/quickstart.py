@@ -12,11 +12,13 @@ logger = RLMLogger(log_dir="./logs")
 rlm = RLM(
     backend="openai",  # or "portkey", etc.
     backend_kwargs={
-        "model_name": "gpt-5-nano",
+        "model_name": "openai/gpt-4.1-mini",
         "api_key": os.getenv("OPENAI_API_KEY"),
     },
-    environment="local",
-    environment_kwargs={},
+    environment="daytona",
+    environment_kwargs={
+        "name": "rlm-sandbox",
+    },
     max_depth=1,
     logger=logger,
     verbose=True,  # For printing to console with rich, disabled by default.
