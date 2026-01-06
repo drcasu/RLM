@@ -78,6 +78,12 @@ export default function PlaygroundPage() {
                 </p>
               </div>
               <div className="flex items-center gap-4">
+                <Link 
+                  href="/"
+                  className="px-3 py-1.5 rounded-md border border-border bg-muted/30 hover:bg-muted/50 text-[11px] font-mono text-muted-foreground transition-colors flex items-center gap-2"
+                >
+                  <span className="text-xs">⬉</span> VISUALIZER
+                </Link>
                 <ThemeToggle />
                 <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono">
                   <span className="flex items-center gap-1.5">
