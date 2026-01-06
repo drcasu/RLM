@@ -1,3 +1,9 @@
+"""
+Daytona REPL environment that runs Python code in Daytona sandboxes.
+
+Uses the Daytona API (https://daytona.io/docs) for sandbox management.
+"""
+
 import base64
 import json
 import textwrap
@@ -9,6 +15,7 @@ from daytona import (
     CreateSandboxFromImageParams,
     Daytona,
     DaytonaConfig,
+    Image,
     Resources,
     SessionExecuteRequest,
 )
@@ -22,22 +29,22 @@ from rlm.environments.base_env import IsolatedEnv
 # =============================================================================
 
 
-def get_default_image() -> dict:
+def get_default_image() -> Image:
     """
-    Build a default Daytona image specification with common libraries for data science,
+    Build a default Daytona image with common libraries for data science,
     math, and general Python work.
     """
-    return {
-        "base_image": "python:3.11-slim",
-        "system_packages": [
-            "build-essential",
-            "git",
-            "curl",
-            "wget",
-            "libopenblas-dev",
-            "liblapack-dev",
-        ],
-        "python_packages": [
+    return (
+        Image.debian_slim("3.11")
+        .run_commands(
+            "apt-get update && apt-get install -y build-essential \
+                 git \
+                 curl \
+                 wget \
+                 libopenblas-dev \
+                 liblapack-dev",
+        )
+        .pip_install(
             # Data science essentials
             "numpy>=1.26.0",
             "pandas>=2.1.0",
@@ -57,8 +64,8 @@ def get_default_image() -> dict:
             "regex>=2023.0.0",
             # For state serialization
             "dill>=0.3.7",
-        ],
-    }
+        )
+    )
 
 
 # =============================================================================
@@ -317,7 +324,7 @@ class DaytonaREPL(IsolatedEnv):
         memory: int = 2,
         disk: int = 5,
         auto_stop_interval: int = 0,
-        image: dict | None = None,
+        image: Image | None = None,
         lm_handler_address: tuple[str, int] | None = None,
         context_payload: dict | list | str | None = None,
         setup_code: str | None = None,
@@ -335,7 +342,7 @@ class DaytonaREPL(IsolatedEnv):
             memory: Memory in GB for the sandbox.
             disk: Disk space in GB for the sandbox.
             auto_stop_interval: Minutes of inactivity before auto-stop. 0 = run indefinitely.
-            image: Image specification dict for declarative building. If None, uses default image.
+            image: Daytona Image object for declarative building. If None, uses default image.
             lm_handler_address: (host, port) tuple for LM Handler server.
             context_payload: Initial context to load into the environment.
             setup_code: Optional code to run during setup.

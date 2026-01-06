@@ -49,6 +49,7 @@ def main():
 
     try:
         with DaytonaREPL(name="rlm-example") as repl:
+            print(f"Daytona sandbox started with ID: {repl.sandbox.id}")
             result = repl.execute_code("x = 1 + 2")
             print("Executed: x = 1 + 2")
             print(f"Locals: {result.locals}")
@@ -74,6 +75,9 @@ def main():
                 name="rlm-example-handler",
                 lm_handler_address=handler.address,
             ) as repl:
+                print(f"Daytona sandbox started with ID: {repl.sandbox.id}")
+                print(f"Broker URL: {repl.broker_url}")
+
                 # Single LLM query
                 result = repl.execute_code('response = llm_query("What is 2+2?")')
                 print("Executed: response = llm_query('What is 2+2?')")

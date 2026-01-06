@@ -24,6 +24,8 @@ rlm = RLM(
     verbose=True,  # For printing to console with rich, disabled by default.
 )
 
-result = rlm.completion("Print me the first 100 powers of two, each on a newline.")
+result = rlm.completion(
+    "Print me the first 10 powers of two, each on a newline. Then, use `llm_query` to ask the LLM to write a haiku about the 3rd number."
+)
 
 print(result)
