@@ -5,7 +5,6 @@ Uses the Prime SDK (https://docs.primeintellect.ai/sandboxes/sdk) for sandbox ma
 Follows the same HTTP broker pattern as ModalREPL for LLM communication.
 """
 
-import asyncio
 import base64
 import json
 import textwrap
@@ -14,7 +13,12 @@ import time
 from typing import Any
 
 import requests
-from prime_sandboxes import AsyncSandboxClient, CreateSandboxRequest
+from prime_sandboxes import (
+    APIClient,
+    BackgroundJob,
+    CreateSandboxRequest,
+    SandboxClient,
+)
 
 from rlm.core.comms_utils import LMRequest, send_lm_request, send_lm_request_batched
 from rlm.core.types import REPLResult, RLMChatCompletion
@@ -33,13 +37,13 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# Request queue: {request_id: {"request": {...}, "response": None, "event": Event}}
-pending_requests = {}
+# Request queue: {{request_id: {{"request": {{...}}, "response": None, "event": Event}}}}
+pending_requests = {{}}
 lock = threading.Lock()
 
 @app.route("/health")
 def health():
-    return jsonify({"status": "ok"})
+    return jsonify({{"status": "ok"}})
 
 @app.route("/enqueue", methods=["POST"])
 def enqueue():
@@ -49,11 +53,11 @@ def enqueue():
     event = threading.Event()
 
     with lock:
-        pending_requests[request_id] = {
+        pending_requests[request_id] = {{
             "request": data,
             "response": None,
             "event": event,
-        }
+        }}
 
     # Wait for response (with timeout)
     event.wait(timeout=300)
@@ -64,18 +68,18 @@ def enqueue():
     if entry and entry["response"] is not None:
         return jsonify(entry["response"])
     else:
-        return jsonify({"error": "Request timed out"}), 504
+        return jsonify({{"error": "Request timed out"}}), 504
 
 @app.route("/pending")
 def get_pending():
     """Called by PrimeREPL to get pending requests."""
     with lock:
         pending = [
-            {"id": rid, "request": entry["request"]}
+            {{"id": rid, "request": entry["request"]}}
             for rid, entry in pending_requests.items()
             if entry["response"] is None
         ]
-    return jsonify({"pending": pending})
+    return jsonify({{"pending": pending}})
 
 @app.route("/respond", methods=["POST"])
 def respond():
@@ -88,12 +92,12 @@ def respond():
         if request_id in pending_requests:
             pending_requests[request_id]["response"] = response
             pending_requests[request_id]["event"].set()
-            return jsonify({"status": "ok"})
+            return jsonify({{"status": "ok"}})
 
-    return jsonify({"error": "Request not found"}), 404
+    return jsonify({{"error": "Request not found"}}), 404
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8888, threaded=True)
+    app.run(host="0.0.0.0", port={broker_port}, threaded=True)
 '''
 )
 
@@ -103,7 +107,7 @@ if __name__ == "__main__":
 # =============================================================================
 
 
-def _build_exec_script(code: str, broker_port: int = 8080) -> str:
+def _build_exec_script(code: str, broker_port: int = 8888) -> str:
     """
     Build a script that executes code with state persistence.
     LLM queries go through the local broker server.
@@ -262,24 +266,14 @@ class PrimeREPL(IsolatedEnv):
     - Sandbox runs a broker server exposed via sandboxes.expose()
     - PrimeREPL polls the broker for pending LLM requests
     - PrimeREPL forwards requests to the LM handler and posts responses back
-
-    Requires the Prime CLI/SDK to be installed:
-        pip install prime
-        # or for lightweight SDK only:
-        pip install prime-sandboxes
-
-    And authenticated:
-        prime login
-        # or set PRIME_API_KEY environment variable
     """
 
     BROKER_PORT = 8888
-    DEFAULT_IMAGE = "python:3.11-slim"
 
     def __init__(
         self,
         name: str = "rlm-sandbox",
-        docker_image: str | None = None,
+        docker_image: str = "python:3.11-slim",
         timeout_minutes: int = 60,
         lm_handler_address: tuple[str, int] | None = None,
         context_payload: dict | list | str | None = None,
@@ -290,104 +284,124 @@ class PrimeREPL(IsolatedEnv):
         super().__init__(**kwargs)
 
         self.name = name
-        self.docker_image = docker_image or self.DEFAULT_IMAGE
+        self.docker_image = docker_image
         self.timeout_minutes = timeout_minutes
         self.lm_handler_address = lm_handler_address
         self.network_access = network_access
 
+        # Client and sandbox state
+        self.client: SandboxClient | None = None
         self.sandbox_id: str | None = None
+        self.broker_job: BackgroundJob | None = None
         self.broker_url: str | None = None
         self.broker_exposure_id: str | None = None
+
+        # Polling thread for LLM requests
         self.poller_thread: threading.Thread | None = None
         self.poller_stop = threading.Event()
         self.pending_llm_calls: list[RLMChatCompletion] = []
         self._calls_lock = threading.Lock()
 
-        # Event loop for async operations
-        self._loop: asyncio.AbstractEventLoop | None = None
-        self._loop_thread: threading.Thread | None = None
+        self.setup()
 
-        try:
-            self.setup()
+        if context_payload is not None:
+            self.load_context(context_payload)
 
-            if context_payload is not None:
-                self.load_context(context_payload)
-
-            if setup_code:
-                self.execute_code(setup_code)
-        except Exception:
-            self.cleanup()
-            raise
-
-    def _get_loop(self) -> asyncio.AbstractEventLoop:
-        """Get or create an event loop running in a background thread."""
-        if self._loop is None or not self._loop.is_running():
-            self._loop = asyncio.new_event_loop()
-            self._loop_thread = threading.Thread(target=self._loop.run_forever, daemon=True)
-            self._loop_thread.start()
-        return self._loop
-
-    def _run_async(self, coro):
-        """Run an async coroutine from sync code."""
-        loop = self._get_loop()
-        future = asyncio.run_coroutine_threadsafe(coro, loop)
-        return future.result(timeout=600)  # 10 minute timeout
-
-    async def _async_setup(self):
-        """Async setup: create sandbox, start broker, expose port."""
-        async with AsyncSandboxClient() as sandboxes:
-            # Create the sandbox
-            request = CreateSandboxRequest(
-                name=self.name,
-                docker_image=self.docker_image,
-                timeout_minutes=self.timeout_minutes,
-                network_access=self.network_access,
-            )
-            sandbox = await sandboxes.create(request)
-            self.sandbox_id = sandbox.id
-
-            # Wait for sandbox to be ready
-            await sandboxes.wait_for_creation(
-                self.sandbox_id, max_attempts=self.timeout_minutes * 60
-            )
-
-            # Install dependencies for the broker
-            await sandboxes.execute_command(
-                self.sandbox_id,
-                "pip install flask requests dill numpy pandas scipy sympy pyyaml tqdm",
-            )
-
-            # Write the broker script to the sandbox
-            await sandboxes.execute_command(
-                self.sandbox_id,
-                f"cat > /tmp/broker.py << 'BROKER_EOF'\n{_BROKER_SCRIPT}\nBROKER_EOF",
-            )
-
-            # Start the broker as a background job
-            await sandboxes.execute_command(
-                self.sandbox_id,
-                "nohup python /tmp/broker.py > /tmp/broker.log 2>&1 &",
-            )
-
-            # Wait for broker to start
-            await asyncio.sleep(2)
-
-            # Expose the broker port
-            exposed = await sandboxes.expose(
-                self.sandbox_id, port=self.BROKER_PORT, name="rlm-broker"
-            )
-            self.broker_url = exposed.url
-            self.broker_exposure_id = exposed.exposure_id
+        if setup_code:
+            self.execute_code(setup_code)
 
     def setup(self):
         """Create the Prime sandbox, broker, and start polling."""
-        self._run_async(self._async_setup())
+        # Create the client
+        self.client = SandboxClient(APIClient())
+
+        # Create the sandbox
+        request = CreateSandboxRequest(
+            name=self.name,
+            docker_image=self.docker_image,
+            timeout_minutes=self.timeout_minutes,
+            network_access=self.network_access,
+        )
+        sandbox = self.client.create(request)
+        self.sandbox_id = sandbox.id
+
+        # Wait for sandbox to be ready
+        self.client.wait_for_creation(self.sandbox_id, max_attempts=self.timeout_minutes * 60)
+
+        # Install dependencies for the broker
+        self.client.execute_command(
+            self.sandbox_id,
+            "pip install flask requests dill",
+        )
+
+        # Write the broker script to the sandbox.
+        # Unlike Modal's sandbox.exec() which accepts separate args, Prime's
+        # start_background_job() takes a shell command string. We write to a file
+        # to avoid shell escaping issues with quotes/special chars in the script.
+        broker_script = _BROKER_SCRIPT.format(broker_port=self.BROKER_PORT)
+        broker_script_b64 = base64.b64encode(broker_script.encode()).decode()
+        self.client.execute_command(
+            self.sandbox_id,
+            f"echo '{broker_script_b64}' | base64 -d > /tmp/broker.py",
+        )
+
+        # Start the broker as a background job
+        self.broker_job = self.client.start_background_job(
+            self.sandbox_id,
+            "python /tmp/broker.py",
+        )
+
+        # Wait for broker to be ready with health check
+        self._wait_for_broker()
+
+        # Expose the broker port
+        exposed = self.client.expose(self.sandbox_id, port=self.BROKER_PORT, name="rlm-broker")
+        self.broker_url = exposed.url
+        self.broker_exposure_id = exposed.exposure_id
 
         # Start polling thread if we have an LM handler
         if self.lm_handler_address and self.broker_url:
             self.poller_stop.clear()
             self.poller_thread = threading.Thread(target=self._poll_broker, daemon=True)
             self.poller_thread.start()
+
+    def _wait_for_broker(self, max_attempts: int = 30):
+        """Wait for the broker to be ready by checking health endpoint."""
+        # Use Python to check health (curl may not be installed in slim images)
+        health_check_cmd = (
+            f'python -c "import requests; '
+            f"r = requests.get('http://127.0.0.1:{self.BROKER_PORT}/health', timeout=2); "
+            f'print(r.text)"'
+        )
+
+        for _ in range(max_attempts):
+            time.sleep(1)
+            try:
+                result = self.client.execute_command(
+                    self.sandbox_id,
+                    health_check_cmd,
+                )
+                if "ok" in result.stdout.lower():
+                    return
+            except Exception:
+                pass
+
+        # Get broker logs for debugging by reading log files directly
+        error_info = "Broker failed to start."
+        if self.broker_job:
+            try:
+                stdout_result = self.client.execute_command(
+                    self.sandbox_id,
+                    f"cat {self.broker_job.stdout_log_file} 2>/dev/null || echo 'No stdout log'",
+                )
+                stderr_result = self.client.execute_command(
+                    self.sandbox_id,
+                    f"cat {self.broker_job.stderr_log_file} 2>/dev/null || echo 'No stderr log'",
+                )
+                error_info += f"\nstdout: {stdout_result.stdout}\nstderr: {stderr_result.stdout}"
+            except Exception as e:
+                error_info += f"\nFailed to read logs: {e}"
+        raise RuntimeError(error_info)
 
     def _poll_broker(self):
         """Poll the broker for pending LLM requests and handle them."""
@@ -396,7 +410,6 @@ class PrimeREPL(IsolatedEnv):
                 # Get pending requests
                 resp = requests.get(
                     f"{self.broker_url}/pending",
-                    timeout=5,
                 )
                 pending = resp.json().get("pending", [])
 
@@ -411,7 +424,6 @@ class PrimeREPL(IsolatedEnv):
                     requests.post(
                         f"{self.broker_url}/respond",
                         json={"id": request_id, "response": response},
-                        timeout=10,
                     )
 
             except requests.exceptions.RequestException:
@@ -469,28 +481,6 @@ class PrimeREPL(IsolatedEnv):
 
         self.execute_code(context_code)
 
-    async def _async_execute_code(self, code: str) -> tuple[str, str]:
-        """Async code execution in the sandbox."""
-        script = _build_exec_script(code, self.BROKER_PORT)
-
-        # Write script to file and execute (avoids shell escaping issues)
-        script_b64 = base64.b64encode(script.encode()).decode()
-
-        async with AsyncSandboxClient() as sandboxes:
-            # Write the script
-            await sandboxes.execute_command(
-                self.sandbox_id,
-                f"echo '{script_b64}' | base64 -d > /tmp/exec_script.py",
-            )
-
-            # Execute the script
-            result = await sandboxes.execute_command(
-                self.sandbox_id,
-                "python /tmp/exec_script.py",
-            )
-
-            return result.stdout, result.stderr
-
     def execute_code(self, code: str) -> REPLResult:
         """Execute code in the Prime sandbox and return result."""
         start_time = time.perf_counter()
@@ -499,8 +489,21 @@ class PrimeREPL(IsolatedEnv):
         with self._calls_lock:
             self.pending_llm_calls.clear()
 
-        # Execute the code
-        stdout, stderr = self._run_async(self._async_execute_code(code))
+        # Build and write the script
+        script = _build_exec_script(code, self.BROKER_PORT)
+        script_b64 = base64.b64encode(script.encode()).decode()
+        self.client.execute_command(
+            self.sandbox_id,
+            f"echo '{script_b64}' | base64 -d > /tmp/exec_script.py",
+        )
+
+        # Execute the script
+        result = self.client.execute_command(
+            self.sandbox_id,
+            "python /tmp/exec_script.py",
+        )
+        stdout = result.stdout
+        stderr = result.stderr
 
         # Collect LLM calls made during this execution
         with self._calls_lock:
@@ -513,12 +516,12 @@ class PrimeREPL(IsolatedEnv):
         try:
             lines = stdout.strip().split("\n")
             result_json = lines[-1] if lines else "{}"
-            result = json.loads(result_json)
+            parsed = json.loads(result_json)
 
             return REPLResult(
-                stdout=result.get("stdout", ""),
-                stderr=result.get("stderr", "") + (stderr or ""),
-                locals=result.get("locals", {}),
+                stdout=parsed.get("stdout", ""),
+                stderr=parsed.get("stderr", "") + stderr,
+                locals=parsed.get("locals", {}),
                 execution_time=execution_time,
                 rlm_calls=pending_calls,
             )
@@ -531,23 +534,6 @@ class PrimeREPL(IsolatedEnv):
                 rlm_calls=pending_calls,
             )
 
-    async def _async_cleanup(self):
-        """Async cleanup: unexpose port and delete sandbox."""
-        async with AsyncSandboxClient() as sandboxes:
-            # Unexpose the broker port
-            if self.sandbox_id and self.broker_exposure_id:
-                try:
-                    await sandboxes.unexpose(self.sandbox_id, self.broker_exposure_id)
-                except Exception:
-                    pass
-
-            # Delete the sandbox
-            if self.sandbox_id:
-                try:
-                    await sandboxes.delete(self.sandbox_id)
-                except Exception:
-                    pass
-
     def cleanup(self):
         """Terminate the sandbox and stop polling."""
         # Stop the poller thread
@@ -556,21 +542,24 @@ class PrimeREPL(IsolatedEnv):
             self.poller_thread.join(timeout=2)
             self.poller_thread = None
 
-        # Clean up sandbox
-        if self.sandbox_id is not None:
+        # Cleanup sandbox resources
+        if self.client is None or self.sandbox_id is None:
+            return
+
+        # Unexpose the broker port
+        if self.broker_exposure_id:
             try:
-                self._run_async(self._async_cleanup())
+                self.client.unexpose(self.sandbox_id, self.broker_exposure_id)
             except Exception:
                 pass
-            self.sandbox_id = None
 
-        # Stop the event loop
-        if self._loop is not None and self._loop.is_running():
-            self._loop.call_soon_threadsafe(self._loop.stop)
-            if self._loop_thread is not None:
-                self._loop_thread.join(timeout=2)
-            self._loop = None
-            self._loop_thread = None
+        # Delete the sandbox
+        try:
+            self.client.delete(self.sandbox_id)
+        except Exception:
+            pass
+
+        self.sandbox_id = None
 
     def __enter__(self):
         return self
