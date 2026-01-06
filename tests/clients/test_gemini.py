@@ -120,7 +120,7 @@ class TestGeminiClientUnit:
             with pytest.raises(ValueError, match="Model name is required"):
                 client.completion("Hello")
 
-    def test_completion_mocked(self):
+    def test_completion_with_mocked_response(self):
         """Test completion with mocked API response."""
         mock_response = MagicMock()
         mock_response.text = "Hello from Gemini!"
@@ -137,7 +137,6 @@ class TestGeminiClientUnit:
 
             assert result == "Hello from Gemini!"
             assert client.model_call_counts["gemini-2.5-flash"] == 1
-            assert client.model_input_tokens["gemini-2.5-flash"] == 10
             assert client.model_input_tokens["gemini-2.5-flash"] == 10
             assert client.model_output_tokens["gemini-2.5-flash"] == 5
 
