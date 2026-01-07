@@ -57,6 +57,10 @@ def get_client(
         from rlm.clients.azure_openai import AzureOpenAIClient
 
         return AzureOpenAIClient(**backend_kwargs)
+    elif backend == "ollama_local":
+        from rlm.clients.ollama_local import OllamaLocalClient
+        
+        return OllamaLocalClient(**backend_kwargs)
     else:
         raise ValueError(
             f"Unknown backend: {backend}. Supported backends: ['openai', 'vllm', 'portkey', 'openrouter', 'litellm', 'anthropic', 'azure_openai', 'gemini', 'vercel']"
