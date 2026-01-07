@@ -20,6 +20,7 @@ from prime_sandboxes import (
     SandboxClient,
 )
 
+from rlm.constants.repl import APT_PACKAGES, PIP_PACKAGES
 from rlm.core.comms_utils import LMRequest, send_lm_request, send_lm_request_batched
 from rlm.core.types import REPLResult, RLMChatCompletion
 from rlm.environments.base_env import IsolatedEnv
@@ -328,11 +329,13 @@ class PrimeREPL(IsolatedEnv):
         # Wait for sandbox to be ready
         self.client.wait_for_creation(self.sandbox_id, max_attempts=self.timeout_minutes * 60)
 
-        # Install dependencies for the broker
-        self.client.execute_command(
-            self.sandbox_id,
-            "pip install flask requests dill",
-        )
+        # Install apt dependencies
+        apt_cmd = "apt-get update && apt-get install -y " + " ".join(APT_PACKAGES)
+        self.client.execute_command(self.sandbox_id, apt_cmd)
+
+        # Install pip dependencies
+        pip_cmd = "pip install " + " ".join(f'"{pkg}"' for pkg in PIP_PACKAGES)
+        self.client.execute_command(self.sandbox_id, pip_cmd)
 
         # Write the broker script to the sandbox.
         # Unlike Modal's sandbox.exec() which accepts separate args, Prime's
@@ -410,6 +413,7 @@ class PrimeREPL(IsolatedEnv):
                 # Get pending requests
                 resp = requests.get(
                     f"{self.broker_url}/pending",
+                    timeout=10,
                 )
                 pending = resp.json().get("pending", [])
 
@@ -424,6 +428,7 @@ class PrimeREPL(IsolatedEnv):
                     requests.post(
                         f"{self.broker_url}/respond",
                         json={"id": request_id, "response": response},
+                        timeout=10,
                     )
 
             except requests.exceptions.RequestException:
