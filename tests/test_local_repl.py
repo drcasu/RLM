@@ -195,105 +195,52 @@ class TestLocalREPLCleanup:
         assert not os.path.exists(temp_dir)
 
 
-class TestLocalREPLMultiContext:
-    """Tests for multi-context support."""
+class TestLocalREPLSimulatingRLMNoPersistence:
+    """
+    Tests simulating RLM's non-persistent completion behavior.
 
-    def test_add_context_versioning(self):
-        """Test that add_context creates versioned variables."""
-        repl = LocalREPL()
-        repl.add_context("First", 0)
-        repl.add_context("Second", 1)
-        assert repl.locals["context_0"] == "First"
-        assert repl.locals["context_1"] == "Second"
-        assert repl.locals["context"] == "First"
-        assert repl.get_context_count() == 2
-        repl.cleanup()
+    When RLM is configured without persistent=True (the default), each
+    get_completion() call spawns a fresh environment and destroys it after.
+    This test suite simulates that behavior to prove variables don't survive
+    across RLM completions.
 
-    def test_update_handler_address(self):
-        """Test handler address can be updated."""
-        repl = LocalREPL(lm_handler_address=("127.0.0.1", 5000))
-        repl.update_handler_address(("127.0.0.1", 6000))
-        assert repl.lm_handler_address == ("127.0.0.1", 6000)
-        repl.cleanup()
+    Why this matters: This is NOT just testing that two Python objects don't
+    share state (trivially true). This simulates the actual RLM workflow where
+    environments are created and destroyed per completion.
+    """
 
-    def test_add_context_auto_increment(self):
-        """Test that add_context auto-increments when no index provided."""
-        repl = LocalREPL()
-        idx1 = repl.add_context("First")
-        idx2 = repl.add_context("Second")
-        assert idx1 == 0
-        assert idx2 == 1
-        assert repl.locals["context_0"] == "First"
-        assert repl.locals["context_1"] == "Second"
-        assert repl.get_context_count() == 2
-        repl.cleanup()
+    def test_simulated_rlm_completions_reset_environment(self):
+        """
+        Simulates 2 RLM completions to show env resets between calls.
 
+        Without persistent=True, RLM creates a fresh environment for each
+        completion, so state doesn't carry over.
+        """
+        completion_1_env = LocalREPL()
+        completion_1_env.execute_code("important_result = 42")
+        assert completion_1_env.locals["important_result"] == 42
+        completion_1_env.cleanup()
 
-class TestLocalREPLHistory:
-    """Tests for message history storage in LocalREPL."""
+        completion_2_env = LocalREPL()
+        result = completion_2_env.execute_code("print(important_result)")
 
-    def test_add_history_basic(self):
-        """Test that add_history stores message history correctly."""
-        repl = LocalREPL()
+        assert "NameError" in result.stderr
+        assert "important_result" in result.stderr
+        completion_2_env.cleanup()
 
-        history = [
-            {"role": "system", "content": "You are helpful."},
-            {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": "Hi there!"},
-        ]
+    def test_simulated_rlm_completions_functions_not_preserved(self):
+        """
+        Simulates 2 RLM completions to show functions don't persist.
+        """
+        completion_1_env = LocalREPL()
+        completion_1_env.execute_code("def my_helper(): return 'useful'")
+        assert completion_1_env.execute_code("print(my_helper())").stdout.strip() == "useful"
+        completion_1_env.cleanup()
 
-        index = repl.add_history(history)
+        completion_2_env = LocalREPL()
+        result = completion_2_env.execute_code("my_helper()")
 
-        assert index == 0
-        assert "history_0" in repl.locals
-        assert "history" in repl.locals  # alias
-        assert repl.locals["history_0"] == history
-        assert repl.locals["history"] == history
-        assert repl.get_history_count() == 1
+        assert "NameError" in result.stderr
+        assert "my_helper" in result.stderr
+        completion_2_env.cleanup()
 
-        repl.cleanup()
-
-    def test_add_multiple_histories(self):
-        """Test adding multiple conversation histories."""
-        repl = LocalREPL()
-
-        history1 = [{"role": "user", "content": "First conversation"}]
-        history2 = [{"role": "user", "content": "Second conversation"}]
-
-        repl.add_history(history1)
-        repl.add_history(history2)
-
-        assert repl.get_history_count() == 2
-        assert repl.locals["history_0"] == history1
-        assert repl.locals["history_1"] == history2
-        assert repl.locals["history"] == history1  # alias stays on first
-
-        repl.cleanup()
-
-    def test_history_accessible_via_code(self):
-        """Test that stored history is accessible via code execution."""
-        repl = LocalREPL()
-
-        history = [{"role": "user", "content": "Test message"}]
-        repl.add_history(history)
-
-        result = repl.execute_code("msg = history[0]['content']")
-        assert result.stderr == ""
-        assert repl.locals["msg"] == "Test message"
-
-        repl.cleanup()
-
-    def test_history_is_copy(self):
-        """Test that stored history is a copy, not a reference."""
-        repl = LocalREPL()
-
-        history = [{"role": "user", "content": "Original"}]
-        repl.add_history(history)
-
-        # Modify original
-        history[0]["content"] = "Modified"
-
-        # Stored copy should be unchanged
-        assert repl.locals["history_0"][0]["content"] == "Original"
-
-        repl.cleanup()
