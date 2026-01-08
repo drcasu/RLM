@@ -7,10 +7,10 @@ import time
 import modal
 import requests
 
-from rlm.constants.repl import APT_PACKAGES, PIP_PACKAGES
 from rlm.core.comms_utils import LMRequest, send_lm_request, send_lm_request_batched
 from rlm.core.types import REPLResult, RLMChatCompletion
 from rlm.environments.base_env import IsolatedEnv
+from rlm.environments.constants import APT_PACKAGES, PIP_PACKAGES
 
 # =============================================================================
 # Default Modal Image

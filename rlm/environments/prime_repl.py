@@ -13,6 +13,7 @@ import time
 from typing import Any
 
 import requests
+from dotenv import load_dotenv
 from prime_sandboxes import (
     APIClient,
     BackgroundJob,
@@ -20,10 +21,12 @@ from prime_sandboxes import (
     SandboxClient,
 )
 
-from rlm.constants.repl import APT_PACKAGES, PIP_PACKAGES
 from rlm.core.comms_utils import LMRequest, send_lm_request, send_lm_request_batched
 from rlm.core.types import REPLResult, RLMChatCompletion
 from rlm.environments.base_env import IsolatedEnv
+from rlm.environments.constants import APT_PACKAGES, PIP_PACKAGES
+
+load_dotenv()
 
 # =============================================================================
 # Broker Server Script (runs inside sandbox, handles LLM request queue)
@@ -280,12 +283,11 @@ class PrimeREPL(IsolatedEnv):
         context_payload: dict | list | str | None = None,
         setup_code: str | None = None,
         network_access: bool = True,
-        api_key: str | None = None,
         persistent: bool = False,
         **kwargs: Any,
     ):
         super().__init__(persistent=persistent, **kwargs)
-        
+
         if persistent:
             raise NotImplementedError(
                 "Persistent REPLs are currently not supported for environment: PrimeREPL"
