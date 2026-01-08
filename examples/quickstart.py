@@ -12,20 +12,16 @@ logger = RLMLogger(log_dir="./logs")
 rlm = RLM(
     backend="openai",  # or "portkey", etc.
     backend_kwargs={
-        "model_name": "openai/gpt-4.1-mini",
+        "model_name": "gpt-5-nano",
         "api_key": os.getenv("OPENAI_API_KEY"),
     },
-    environment="daytona",
-    environment_kwargs={
-        "name": "rlm-sandbox",
-    },
+    environment="local",
+    environment_kwargs={},
     max_depth=1,
     logger=logger,
     verbose=True,  # For printing to console with rich, disabled by default.
 )
 
-result = rlm.completion(
-    "Print me the first 10 powers of two, each on a newline. Then, use `llm_query` to ask the LLM to write a haiku about the 3rd number."
-)
+result = rlm.completion("Print me the first 100 powers of two, each on a newline.")
 
 print(result)
