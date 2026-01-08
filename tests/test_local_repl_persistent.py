@@ -198,10 +198,12 @@ class TestLocalREPLPersistentState:
         assert result.stderr == ""
         assert repl.locals["profit"] == 600
 
-        repl.add_history([
-            {"role": "user", "content": "What were the sales?"},
-            {"role": "assistant", "content": "Sales were $1000"},
-        ])
+        repl.add_history(
+            [
+                {"role": "user", "content": "What were the sales?"},
+                {"role": "assistant", "content": "Sales were $1000"},
+            ]
+        )
 
         code = """
 summary = f"Sales: {context_0}, Costs: {context_1}, Profit: {profit}"

@@ -243,4 +243,3 @@ class TestLocalREPLSimulatingRLMNoPersistence:
         assert "NameError" in result.stderr
         assert "my_helper" in result.stderr
         completion_2_env.cleanup()
-
