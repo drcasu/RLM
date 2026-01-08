@@ -9,52 +9,26 @@ Tests that multiple LM completion calls in one RLM session:
 """
 
 import pytest
-from unittest.mock import patch
-from typing import Any
+from unittest.mock import patch, Mock
 
 from rlm import RLM
-from rlm.clients.base_lm import BaseLM
 from rlm.core.types import UsageSummary, ModelUsageSummary
-import rlm.core.rlm as rlm_module  # Import the module for patching
+import rlm.core.rlm as rlm_module
 
 
-class ScriptedMockLM(BaseLM):
-    """Mock LM that returns scripted responses to enable controlled testing."""
-
-    def __init__(self, responses: list[str] | None = None):
-        super().__init__(model_name="scripted-mock")
-        self.responses = responses or []
-        self.call_index = 0
-        self.prompts_received: list[Any] = []
-
-    def completion(self, prompt: Any) -> str:
-        self.prompts_received.append(prompt)
-        if self.call_index < len(self.responses):
-            response = self.responses[self.call_index]
-            self.call_index += 1
-            return response
-        return "FINAL(default answer)"
-
-    async def acompletion(self, prompt: Any) -> str:
-        return self.completion(prompt)
-
-    def get_usage_summary(self) -> UsageSummary:
-        return UsageSummary(
-            model_usage_summaries={
-                "scripted-mock": ModelUsageSummary(
-                    total_calls=self.call_index,
-                    total_input_tokens=100 * self.call_index,
-                    total_output_tokens=50 * self.call_index,
-                )
-            }
-        )
-
-    def get_last_usage(self) -> UsageSummary:
-        return self.get_usage_summary()
-
-    def reset(self) -> None:
-        """Reset for next completion call (call index resets, but keep history of prompts)."""
-        self.call_index = 0
+def create_mock_lm(responses: list[str]) -> Mock:
+    """Create a mock LM that returns responses in order."""
+    mock = Mock()
+    mock.completion.side_effect = list(responses)
+    mock.get_usage_summary.return_value = UsageSummary(
+        model_usage_summaries={
+            "mock": ModelUsageSummary(
+                total_calls=1, total_input_tokens=100, total_output_tokens=50
+            )
+        }
+    )
+    mock.get_last_usage.return_value = mock.get_usage_summary.return_value
+    return mock
 
 
 class TestMultiTurnPersistentEnvironment:
@@ -62,11 +36,10 @@ class TestMultiTurnPersistentEnvironment:
 
     def test_environment_reused_in_persistent_mode(self):
         """Verify the same environment instance is reused across completion calls."""
-        # Response that immediately provides a final answer
         responses = ["FINAL(answer from call)"]
 
         with patch.object(rlm_module, "get_client") as mock_get_client:
-            mock_lm = ScriptedMockLM(responses)
+            mock_lm = create_mock_lm(responses)
             mock_get_client.return_value = mock_lm
 
             with RLM(
@@ -77,7 +50,7 @@ class TestMultiTurnPersistentEnvironment:
                 rlm.completion("First context")
                 first_env = rlm._persistent_env
 
-                mock_lm.reset()
+                mock_lm.completion.side_effect = list(responses)
 
                 rlm.completion("Second context")
                 second_env = rlm._persistent_env
@@ -90,7 +63,7 @@ class TestMultiTurnPersistentEnvironment:
         responses = ["FINAL(got it)"]
 
         with patch.object(rlm_module, "get_client") as mock_get_client:
-            mock_lm = ScriptedMockLM(responses)
+            mock_lm = create_mock_lm(responses)
             mock_get_client.return_value = mock_lm
 
             with RLM(
@@ -99,9 +72,9 @@ class TestMultiTurnPersistentEnvironment:
                 persistent=True,
             ) as rlm:
                 rlm.completion("First document")
-                mock_lm.reset()
+                mock_lm.completion.side_effect = list(responses)
                 rlm.completion("Second document")
-                mock_lm.reset()
+                mock_lm.completion.side_effect = list(responses)
                 rlm.completion("Third document")
 
                 env = rlm._persistent_env
@@ -109,7 +82,6 @@ class TestMultiTurnPersistentEnvironment:
                 assert env.locals["context_0"] == "First document"
                 assert env.locals["context_1"] == "Second document"
                 assert env.locals["context_2"] == "Third document"
-                # context alias should point to first context
                 assert env.locals["context"] == "First document"
 
     def test_history_accumulation_across_calls(self):
@@ -117,7 +89,7 @@ class TestMultiTurnPersistentEnvironment:
         responses = ["FINAL(done)"]
 
         with patch.object(rlm_module, "get_client") as mock_get_client:
-            mock_lm = ScriptedMockLM(responses)
+            mock_lm = create_mock_lm(responses)
             mock_get_client.return_value = mock_lm
 
             with RLM(
@@ -126,27 +98,22 @@ class TestMultiTurnPersistentEnvironment:
                 persistent=True,
             ) as rlm:
                 rlm.completion("Context A")
-                mock_lm.reset()
+                mock_lm.completion.side_effect = list(responses)
                 rlm.completion("Context B")
-                mock_lm.reset()
+                mock_lm.completion.side_effect = list(responses)
                 rlm.completion("Context C")
 
                 env = rlm._persistent_env
-                # After 3 completions, should have 3 histories stored
                 assert env.get_history_count() == 3
                 assert "history_0" in env.locals
                 assert "history_1" in env.locals
                 assert "history_2" in env.locals
-                # Each history should be a list of message dicts
                 assert isinstance(env.locals["history_0"], list)
                 assert len(env.locals["history_0"]) > 0
-                # history alias should point to first history
                 assert env.locals["history"] == env.locals["history_0"]
 
     def test_variable_persistence_across_completions(self):
         """Variables computed in one completion should be available in subsequent ones."""
-        # First call: compute a variable
-        # Second call: use that variable
         first_responses = [
             "Let me compute something\n```repl\ncomputed_value = 42 * 2\nprint(computed_value)\n```",
             "FINAL(84)",
@@ -157,7 +124,7 @@ class TestMultiTurnPersistentEnvironment:
         ]
 
         with patch.object(rlm_module, "get_client") as mock_get_client:
-            mock_lm = ScriptedMockLM(first_responses)
+            mock_lm = create_mock_lm(first_responses)
             mock_get_client.return_value = mock_lm
 
             with RLM(
@@ -168,8 +135,7 @@ class TestMultiTurnPersistentEnvironment:
                 rlm.completion("Compute 42 * 2")
                 assert rlm._persistent_env.locals.get("computed_value") == 84
 
-                mock_lm.responses = second_responses
-                mock_lm.reset()
+                mock_lm.completion.side_effect = list(second_responses)
                 rlm.completion("Add 10 to the previous result")
 
                 assert rlm._persistent_env.locals.get("computed_value") == 84
@@ -184,7 +150,7 @@ class TestMultiTurnPromptAwareness:
         responses = ["FINAL(ok)"]
 
         with patch.object(rlm_module, "get_client") as mock_get_client:
-            mock_lm = ScriptedMockLM(responses)
+            mock_lm = create_mock_lm(responses)
             mock_get_client.return_value = mock_lm
 
             with RLM(
@@ -193,12 +159,10 @@ class TestMultiTurnPromptAwareness:
                 persistent=True,
             ) as rlm:
                 rlm.completion("First")
-                mock_lm.reset()
+                mock_lm.completion.side_effect = list(responses)
                 rlm.completion("Second")
 
-                # Check that the second call's prompt mentions multiple contexts
-                last_prompt = mock_lm.prompts_received[-1]
-                # last_prompt is a list of message dicts
+                last_prompt = mock_lm.completion.call_args[0][0]
                 user_messages = [m for m in last_prompt if m.get("role") == "user"]
                 user_content = " ".join(m.get("content", "") for m in user_messages)
 
@@ -209,7 +173,7 @@ class TestMultiTurnPromptAwareness:
         responses = ["FINAL(ok)"]
 
         with patch.object(rlm_module, "get_client") as mock_get_client:
-            mock_lm = ScriptedMockLM(responses)
+            mock_lm = create_mock_lm(responses)
             mock_get_client.return_value = mock_lm
 
             with RLM(
@@ -218,11 +182,10 @@ class TestMultiTurnPromptAwareness:
                 persistent=True,
             ) as rlm:
                 rlm.completion("First task")
-                mock_lm.reset()
-                rlm.completion("Second task")  # Should have 1 history from first
+                mock_lm.completion.side_effect = list(responses)
+                rlm.completion("Second task")
 
-                # The prompt for second call should mention history
-                last_prompt = mock_lm.prompts_received[-1]
+                last_prompt = mock_lm.completion.call_args[0][0]
                 user_messages = [m for m in last_prompt if m.get("role") == "user"]
                 user_content = " ".join(m.get("content", "") for m in user_messages)
 
@@ -234,13 +197,14 @@ class TestMultiTurnCodeExecution:
 
     def test_can_access_previous_context_in_code(self):
         """Code should be able to reference earlier contexts."""
-        responses = [
+        first_responses = ["FINAL(first done)"]
+        second_responses = [
             "```repl\nprint(f'First: {context_0}, Second: {context_1}')\n```",
             "FINAL(printed both)",
         ]
 
         with patch.object(rlm_module, "get_client") as mock_get_client:
-            mock_lm = ScriptedMockLM(["FINAL(first done)"])
+            mock_lm = create_mock_lm(first_responses)
             mock_get_client.return_value = mock_lm
 
             with RLM(
@@ -250,24 +214,23 @@ class TestMultiTurnCodeExecution:
             ) as rlm:
                 rlm.completion("Document A")
 
-                mock_lm.responses = responses
-                mock_lm.reset()
+                mock_lm.completion.side_effect = list(second_responses)
                 rlm.completion("Document B")
 
-                # Both contexts should be accessible
                 env = rlm._persistent_env
                 assert env.locals["context_0"] == "Document A"
                 assert env.locals["context_1"] == "Document B"
 
     def test_can_access_history_in_code(self):
         """Code should be able to reference stored histories."""
-        responses = [
+        first_responses = ["FINAL(first)"]
+        second_responses = [
             "```repl\nprint(f'History entries: {len(history)}')\n```",
             "FINAL(accessed history)",
         ]
 
         with patch.object(rlm_module, "get_client") as mock_get_client:
-            mock_lm = ScriptedMockLM(["FINAL(first)"])
+            mock_lm = create_mock_lm(first_responses)
             mock_get_client.return_value = mock_lm
 
             with RLM(
@@ -277,9 +240,7 @@ class TestMultiTurnCodeExecution:
             ) as rlm:
                 rlm.completion("First query")
 
-                mock_lm.responses = responses
-                mock_lm.reset()
-
+                mock_lm.completion.side_effect = list(second_responses)
                 rlm.completion("Second query")
 
                 env = rlm._persistent_env
@@ -295,20 +256,19 @@ class TestNonPersistentMode:
         responses = ["FINAL(done)"]
 
         with patch.object(rlm_module, "get_client") as mock_get_client:
-            mock_lm = ScriptedMockLM(responses)
+            mock_lm = create_mock_lm(responses)
             mock_get_client.return_value = mock_lm
 
             rlm = RLM(
                 backend="openai",
                 backend_kwargs={"model_name": "test"},
-                persistent=False,  # Explicitly non-persistent
+                persistent=False,
             )
 
             rlm.completion("First")
-            # In non-persistent mode, no persistent env should be stored
             assert rlm._persistent_env is None
 
-            mock_lm.reset()
+            mock_lm.completion.side_effect = list(responses)
             rlm.completion("Second")
             assert rlm._persistent_env is None
 
@@ -329,7 +289,7 @@ class TestPersistentModeResourceManagement:
         responses = ["FINAL(done)"]
 
         with patch.object(rlm_module, "get_client") as mock_get_client:
-            mock_lm = ScriptedMockLM(responses)
+            mock_lm = create_mock_lm(responses)
             mock_get_client.return_value = mock_lm
 
             with RLM(
@@ -340,7 +300,6 @@ class TestPersistentModeResourceManagement:
                 rlm.completion("Test")
                 assert rlm._persistent_env is not None
 
-            # After exiting context manager, env should be cleaned up
             assert rlm._persistent_env is None
 
     def test_explicit_close(self):
@@ -348,7 +307,7 @@ class TestPersistentModeResourceManagement:
         responses = ["FINAL(done)"]
 
         with patch.object(rlm_module, "get_client") as mock_get_client:
-            mock_lm = ScriptedMockLM(responses)
+            mock_lm = create_mock_lm(responses)
             mock_get_client.return_value = mock_lm
 
             rlm = RLM(
@@ -407,7 +366,7 @@ class TestMultiTurnEndToEnd:
         ]
 
         with patch.object(rlm_module, "get_client") as mock_get_client:
-            mock_lm = ScriptedMockLM(turn1_responses)
+            mock_lm = create_mock_lm(turn1_responses)
             mock_get_client.return_value = mock_lm
 
             with RLM(
@@ -415,23 +374,17 @@ class TestMultiTurnEndToEnd:
                 backend_kwargs={"model_name": "test"},
                 persistent=True,
             ) as rlm:
-                # Turn 1
                 result1 = rlm.completion("First document about cats")
                 assert "Summarized" in result1.response
 
-                # Turn 2
-                mock_lm.responses = turn2_responses
-                mock_lm.reset()
+                mock_lm.completion.side_effect = list(turn2_responses)
                 result2 = rlm.completion("Second document about dogs")
                 assert "Compared" in result2.response
 
-                # Turn 3
-                mock_lm.responses = turn3_responses
-                mock_lm.reset()
+                mock_lm.completion.side_effect = list(turn3_responses)
                 result3 = rlm.completion("Synthesize everything")
                 assert "synthesized" in result3.response
 
-                # Verify state
                 env = rlm._persistent_env
                 assert env.get_context_count() == 3
                 assert env.get_history_count() == 3
