@@ -13,7 +13,7 @@ from rlm.core.types import (
     RLMIteration,
     RLMMetadata,
 )
-from rlm.environments import BaseEnv, get_environment
+from rlm.environments import BaseEnv, SupportsPersistence, get_environment
 from rlm.logger import RLMLogger, VerbosePrinter
 from rlm.utils.parsing import (
     find_code_blocks,
@@ -88,7 +88,7 @@ class RLM:
 
         # Persistence support
         self.persistent = persistent
-        self._persistent_env: BaseEnv | None = None
+        self._persistent_env: SupportsPersistence | None = None
 
         # Validate persistence support at initialization
         if self.persistent:
@@ -203,12 +203,12 @@ class RLM:
                 # Current prompt = message history + additional prompt suffix
                 context_count = (
                     environment.get_context_count()
-                    if hasattr(environment, "get_context_count")
+                    if isinstance(environment, SupportsPersistence)
                     else 1
                 )
                 history_count = (
                     environment.get_history_count()
-                    if hasattr(environment, "get_history_count")
+                    if isinstance(environment, SupportsPersistence)
                     else 0
                 )
                 current_prompt = message_history + [
@@ -239,7 +239,7 @@ class RLM:
                     self.verbose.print_summary(i + 1, time_end - time_start, usage.to_dict())
 
                     # Store message history in persistent environment
-                    if self.persistent and hasattr(environment, "add_history"):
+                    if self.persistent and isinstance(environment, SupportsPersistence):
                         environment.add_history(message_history)
 
                     return RLMChatCompletion(
@@ -266,7 +266,7 @@ class RLM:
             self.verbose.print_summary(self.max_iterations, time_end - time_start, usage.to_dict())
 
             # Store message history in persistent environment
-            if self.persistent and hasattr(environment, "add_history"):
+            if self.persistent and isinstance(environment, SupportsPersistence):
                 environment.add_history(message_history)
 
             return RLMChatCompletion(
@@ -367,18 +367,7 @@ class RLM:
     @staticmethod
     def _env_supports_persistence(env: BaseEnv) -> bool:
         """Check if an environment instance supports persistent mode methods."""
-        return (
-            hasattr(env, "update_handler_address")
-            and hasattr(env, "add_context")
-            and hasattr(env, "get_context_count")
-            and hasattr(env, "add_history")
-            and hasattr(env, "get_history_count")
-            and callable(getattr(env, "update_handler_address", None))
-            and callable(getattr(env, "add_context", None))
-            and callable(getattr(env, "get_context_count", None))
-            and callable(getattr(env, "add_history", None))
-            and callable(getattr(env, "get_history_count", None))
-        )
+        return isinstance(env, SupportsPersistence)
 
     def close(self) -> None:
         """Clean up persistent environment. Call when done with multi-turn conversations."""

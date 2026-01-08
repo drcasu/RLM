@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Any, Protocol, runtime_checkable
 
 from rlm.core.types import REPLResult
 
@@ -69,3 +70,22 @@ class NonIsolatedEnv(BaseEnv, ABC):
     @abstractmethod
     def execute_code(self, code: str) -> REPLResult:
         raise NotImplementedError
+
+
+@runtime_checkable
+class SupportsPersistence(Protocol):
+    """Protocol for environments that support persistent multi-turn sessions.
+
+    Use isinstance(env, SupportsPersistence) to check if an environment
+    supports persistence capabilities.
+    """
+
+    def update_handler_address(self, address: tuple[str, int]) -> None: ...
+    def add_context(
+        self, context_payload: dict | list | str, context_index: int | None = None
+    ) -> int: ...
+    def get_context_count(self) -> int: ...
+    def add_history(
+        self, message_history: list[dict[str, Any]], history_index: int | None = None
+    ) -> int: ...
+    def get_history_count(self) -> int: ...
