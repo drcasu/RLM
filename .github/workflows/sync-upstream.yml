@@ -5,9 +5,6 @@ on:
     - cron: '0 0 * * *'
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -17,13 +14,28 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
-      - name: Sync with upstream
+      - name: Sync with upstream and preserve workflow
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
           git remote add upstream https://github.com/alexzhang13/rlm.git
           git fetch upstream
-          git merge upstream/main --allow-unrelated-histories --no-edit || true
-          git push origin main
+
+          # Save our sync workflow
+          cp .github/workflows/sync-upstream.yml /tmp/sync-upstream.yml
+
+          # Reset to upstream
+          git reset --hard upstream/main
+
+          # Restore our sync workflow
+          mkdir -p .github/workflows
+          cp /tmp/sync-upstream.yml .github/workflows/sync-upstream.yml
+          git add .github/workflows/sync-upstream.yml
+          git commit -m "chore: preserve sync workflow" --allow-empty
+
+          git push origin main --force
